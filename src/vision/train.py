@@ -177,7 +177,15 @@ def run(strategy: str, args) -> dict:
             if args.checkpoint:
                 Path(args.checkpoint).parent.mkdir(parents=True, exist_ok=True)
                 torch.save(
-                    {"model": model.state_dict(), "classes": CLASS_NAMES, **best},
+                    {
+                        "model": model.state_dict(),
+                        "classes": CLASS_NAMES,
+                        # The framing this model expects. The pipeline crops
+                        # single kernels out of a tray and cannot use a model
+                        # trained on split views, so the checkpoint has to say.
+                        "single_view": args.single_view,
+                        **best,
+                    },
                     f"{args.checkpoint}.{strategy}.pt",
                 )
 

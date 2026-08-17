@@ -23,6 +23,12 @@ range from `0.96 + 0.842x` to `4.75 + 0.774x`. Correcting with the wrong
 session's line is worse than not correcting. Fit it per session, against
 calibration trays photographed on the same rig on the same day.
 
+The classifier the pipeline loads must be one trained on **whole** images.
+Splitting GrainSet's paired views is right for training and wrong here: the
+split-view model scores 0.8893 macro-F1 on its own split, then reads 16.91%
+damage off a tray with none. Checkpoints record their framing and the pipeline
+refuses a mismatch, because macro-F1 does not show it.
+
 ## Layout
 
 - `src/physics/` — deterioration model. Pure arithmetic over published

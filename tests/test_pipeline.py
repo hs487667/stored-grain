@@ -10,7 +10,12 @@ import pytest
 from src.mapping.classes import measure
 from src.measurement.sampling import DamageCalibration
 from src.physics.deterioration import assess
-from src.pipeline import LotReading, correct_measurement, rank_lots
+from src.pipeline import (
+    LotReading,
+    assert_crop_framing,
+    correct_measurement,
+    rank_lots,
+)
 
 
 def _reading(lot_id, damage, kernels=200, temperature=20.0, moisture=14.0):
@@ -183,3 +188,25 @@ def test_the_two_bases_disagree_on_the_same_measurement():
     by_count = correct_measurement(m, CALIBRATION).mass_pct
     by_mass = correct_measurement(m, MASS_CALIBRATION).mass_pct
     assert abs(by_count - by_mass) > 0.5
+
+
+# --- Checkpoint framing ----------------------------------------------------
+# A classifier trained on split GrainSet views scores well on its own metric
+# and is unusable here: the pipeline hands it tight bounding-box crops, and on
+# a tray of undamaged kernels it called 56 of 161 of them fragments -- 16.91%
+# damage against a true 0.00%. The mismatch is invisible in macro-F1, so the
+# checkpoint has to declare its framing and be refused on it.
+
+def test_a_checkpoint_trained_on_split_views_is_refused():
+    with pytest.raises(ValueError, match="split views"):
+        assert_crop_framing({"single_view": True})
+
+
+def test_a_checkpoint_trained_on_whole_images_is_accepted():
+    assert_crop_framing({"single_view": False}) is None
+
+
+def test_a_checkpoint_that_does_not_say_is_accepted():
+    # Checkpoints predating the flag. Silence is not a claim of mismatch, and
+    # refusing them would break every model already trained.
+    assert_crop_framing({}) is None

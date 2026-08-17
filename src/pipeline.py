@@ -43,6 +43,29 @@ from src.vision.localise import UNet, instances_from_logits
 MIN_RELATIVE_AREA = 0.15
 
 
+def assert_crop_framing(state: dict) -> None:
+    """Refuse a classifier trained on framing the pipeline does not produce.
+
+    A GrainSet file holds two views of one kernel, and splitting them into
+    single views is the right call for training -- each view fills the input
+    instead of sharing it. But it changes what a kernel looks like to the
+    model, and the pipeline feeds tight bounding-box crops cut out of a tray,
+    which is the other framing.
+
+    The cost is not subtle and does not show up in the metric that selected the
+    checkpoint. The split-view model scores 0.8893 macro-F1 on its own
+    validation split, then reads 16.91% damage off a tray with none, calling 56
+    of 161 sound kernels fragments -- 22.6 points of mean error end to end
+    against the paired model's 1.11, with the lot ranking broken.
+    """
+    if state.get("single_view"):
+        raise ValueError(
+            "this checkpoint was trained on split views; the pipeline crops "
+            "single kernels from a tray, and the framing mismatch reads "
+            "undamaged kernels as fragments"
+        )
+
+
 @dataclass(frozen=True)
 class CorrectedDamage:
     """Damage after the classifier's own error rates are divided out."""
@@ -156,6 +179,7 @@ class Pipeline:
         self.localiser.eval()
 
         state = torch.load(classifier_checkpoint, map_location=self.device)
+        assert_crop_framing(state)
         classifier = tv.resnet50()
         classifier.fc = torch.nn.Linear(classifier.fc.in_features, len(CLASS_NAMES))
         classifier.load_state_dict(state["model"])
