@@ -72,31 +72,61 @@ class Cutout:
         return int(self.alpha.sum())
 
 
-def load_cutout(sample: Sample) -> Cutout | None:
-    """Lift a kernel out of its image using the dataset's mask.
+#: A connected region smaller than this share of the largest one is debris
+#: rather than a kernel view.
+MIN_VIEW_SHARE = 0.2
 
-    Returns ``None`` when the sample has no mask or the mask is empty, which is
-    the caller's signal to skip it rather than an error -- Corn Seeds ships no
-    masks at all and is a legitimate part of the same manifest.
+
+def load_cutouts(sample: Sample) -> list[Cutout]:
+    """Lift each kernel view out of its image using the dataset's mask.
+
+    **A GrainSet file holds one kernel photographed from both sides, laid out
+    side by side in a single image.** Confirmed visually and numerically: every
+    maize mask splits into exactly two components of near-equal area, roughly
+    50/50. The data card's note that "paired kernel images may not align
+    perfectly" refers to these two halves, not to two separate files.
+
+    Treating the pair as one object is wrong for compositing -- it places a
+    double-width blob that no tray ever contains -- so each view is returned
+    separately. Both views of a kernel share a source file and therefore a
+    split, so using both cannot leak across the train/test boundary.
+
+    Returns an empty list when the sample has no mask or the mask is empty,
+    which is the caller's signal to skip it rather than an error: Corn Seeds
+    ships no masks at all and is a legitimate part of the same manifest.
     """
     if sample.mask is None or not sample.mask.exists():
-        return None
+        return []
 
     rgb = np.array(Image.open(sample.path).convert("RGB"))
     mask = np.array(Image.open(sample.mask).convert("L")) > 127
     if mask.shape != rgb.shape[:2] or not mask.any():
-        return None
+        return []
 
-    ys, xs = np.where(mask)
-    y0, y1 = ys.min(), ys.max() + 1
-    x0, x1 = xs.min(), xs.max() + 1
-    return Cutout(
-        rgb=rgb[y0:y1, x0:x1],
-        alpha=mask[y0:y1, x0:x1],
-        class_name=sample.class_name,
-        relative_mass=sample.kernel_class.relative_mass or 1.0,
-        source=sample.path,
-    )
+    labelled, n = ndimage.label(mask)
+    if n == 0:
+        return []
+    areas = ndimage.sum(np.ones_like(labelled), labelled, range(1, n + 1))
+    largest = areas.max()
+
+    cutouts: list[Cutout] = []
+    for index, area in enumerate(areas, start=1):
+        if area < largest * MIN_VIEW_SHARE:
+            continue
+        view = labelled == index
+        ys, xs = np.where(view)
+        y0, y1 = ys.min(), ys.max() + 1
+        x0, x1 = xs.min(), xs.max() + 1
+        cutouts.append(
+            Cutout(
+                rgb=rgb[y0:y1, x0:x1],
+                alpha=view[y0:y1, x0:x1],
+                class_name=sample.class_name,
+                relative_mass=sample.kernel_class.relative_mass or 1.0,
+                source=sample.path,
+            )
+        )
+    return cutouts
 
 
 @dataclass
@@ -248,8 +278,15 @@ def compose(
             free = alpha & (window == 0)
             if not free.any():
                 continue
-            _, pieces = ndimage.label(free)
-            if pieces != 1:
+            pieces, n_pieces = ndimage.label(free)
+            if n_pieces > 1:
+                # Keep only the largest visible piece and require it to still
+                # be most of the kernel. Demanding exactly one piece rejects
+                # every placement whose mask carries any stray speck, which
+                # silently produced empty scenes.
+                sizes = ndimage.sum(np.ones_like(pieces), pieces, range(1, n_pieces + 1))
+                free = pieces == (int(np.argmax(sizes)) + 1)
+            if free.sum() < alpha.sum() * (1.0 - max_overlap):
                 continue
 
             # Paint only into pixels no kernel has claimed. Kernels abut, they
@@ -291,9 +328,7 @@ def build_cutout_pool(
 
     pool: list[Cutout] = []
     for sample in usable:
-        cutout = load_cutout(sample)
-        if cutout is not None:
-            pool.append(cutout)
+        pool.extend(load_cutouts(sample))
         if limit is not None and len(pool) >= limit:
             break
     if not pool:

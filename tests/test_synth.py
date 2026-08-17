@@ -177,3 +177,66 @@ def test_dense_scenes_still_keep_instances_whole():
         _, pieces = ndimage.label(scene.instances == label)
         broken += pieces > 1
     assert broken == 0
+
+
+# --- Kernel views ----------------------------------------------------------
+# Regression: a GrainSet file holds one kernel photographed from both sides,
+# side by side. Every maize mask splits ~50/50 into two components. Treating
+# the pair as one object composited double-width blobs; requiring exactly one
+# component rejected every real placement and produced empty scenes. Tests
+# used solid rectangles, so neither fault was caught.
+
+def test_a_two_view_mask_yields_two_cutouts(tmp_path):
+    from PIL import Image
+    from src.data.manifest import Sample
+    from src.mapping.classes import CLASSES
+    from src.vision.synth import load_cutouts
+
+    mask = np.zeros((40, 80), dtype=np.uint8)
+    mask[8:32, 5:35] = 255      # left view
+    mask[8:32, 45:75] = 255     # right view
+    image = np.full((40, 80, 3), 180, dtype=np.uint8)
+
+    image_path, mask_path = tmp_path / "k.png", tmp_path / "k_mask.png"
+    Image.fromarray(image).save(image_path)
+    Image.fromarray(mask).save(mask_path)
+
+    cutouts = load_cutouts(
+        Sample(
+            path=image_path, dataset="grainset", source_label="NOR",
+            kernel_class=CLASSES["sound"], session="s", mask=mask_path,
+        )
+    )
+    assert len(cutouts) == 2
+    for c in cutouts:
+        assert c.alpha.shape[1] == 30      # one view, not the 80px pair
+
+
+def test_debris_specks_are_not_treated_as_views(tmp_path):
+    from PIL import Image
+    from src.data.manifest import Sample
+    from src.mapping.classes import CLASSES
+    from src.vision.synth import load_cutouts
+
+    mask = np.zeros((40, 80), dtype=np.uint8)
+    mask[8:32, 5:35] = 255      # the kernel
+    mask[1:3, 70:72] = 255      # a speck
+    Image.fromarray(np.full((40, 80, 3), 180, dtype=np.uint8)).save(tmp_path / "k.png")
+    Image.fromarray(mask).save(tmp_path / "k_mask.png")
+
+    cutouts = load_cutouts(
+        Sample(
+            path=tmp_path / "k.png", dataset="grainset", source_label="NOR",
+            kernel_class=CLASSES["sound"], session="s", mask=tmp_path / "k_mask.png",
+        )
+    )
+    assert len(cutouts) == 1
+
+
+def test_speckled_masks_still_get_placed():
+    # The bug that emptied every scene: a stray component made the placement
+    # check reject the position, every time, for every kernel.
+    speckled = _cutout("sound", size=(40, 20))
+    speckled.alpha[0, 0] = True
+    scene = compose([speckled] * 30, kernel_px=25, seed=14)
+    assert scene.placed > 0
