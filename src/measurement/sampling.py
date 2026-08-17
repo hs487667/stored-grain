@@ -188,6 +188,12 @@ class DamageCalibration:
         The fitted line has the same two degrees of freedom as the per-kernel
         map, so it is stored the same way: the intercept is what a sound tray
         reads, and the slope is what a fully damaged one loses.
+
+        A slope above ``1 - intercept`` yields a *negative* false-negative
+        rate. That is a real fit, not a bad one -- it says the reading grows
+        faster than the damage does, so nothing is being missed on net -- and
+        the inverse it produces is still correct. Only the reading of the field
+        as a miss rate stops holding.
         """
         if slope <= 0.0:
             raise ValueError(

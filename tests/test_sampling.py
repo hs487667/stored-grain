@@ -253,3 +253,12 @@ def test_calibration_rejects_an_unknown_basis():
         DamageCalibration.from_affine(
             intercept_pct=1.0, slope=0.9, kernels=100, basis="volume"
         )
+
+
+def test_a_pipeline_that_amplifies_damage_gives_a_negative_miss_rate():
+    # A slope above 1 means the reading grows faster than the damage, so
+    # nothing is being missed on net. The inverse is still the right
+    # correction; the rate simply stops being readable as a miss rate.
+    cal = DamageCalibration.from_affine(intercept_pct=0.5, slope=1.10, kernels=100)
+    assert cal.false_negative_rate < 0.0
+    assert cal.correct(0.5 + 1.10 * 20.0) == pytest.approx(20.0)
