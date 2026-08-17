@@ -6,3 +6,4 @@ data/interim/
 data/processed/
 models/
 .pytest_cache/
+data/interim/
