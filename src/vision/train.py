@@ -130,14 +130,16 @@ def run(strategy: str, args) -> dict:
     )
 
     train_loader = DataLoader(
-        KernelDataset(train_samples, train_transform(args.size)),
+        KernelDataset(train_samples, train_transform(args.size),
+                      single_view=args.single_view, train=True),
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.workers,
         persistent_workers=args.workers > 0,
     )
     val_loader = DataLoader(
-        KernelDataset(val_samples, eval_transform(args.size)),
+        KernelDataset(val_samples, eval_transform(args.size),
+                      single_view=args.single_view),
         batch_size=args.batch_size,
         num_workers=args.workers,
         persistent_workers=args.workers > 0,
@@ -198,6 +200,11 @@ def main() -> None:
         help="Which splits to train under. Both, so the inflation is visible.",
     )
     p.add_argument("--results", default="models/baseline-results.json")
+    p.add_argument(
+        "--single-view",
+        action="store_true",
+        help="Split paired GrainSet images so each kernel view fills the input.",
+    )
     args = p.parse_args()
 
     results = {s: run(s, args) for s in args.strategies.split(",")}

@@ -21,6 +21,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import numpy as np
 import torch
 from PIL import Image
 from torch.utils.data import Dataset
@@ -68,17 +69,74 @@ def eval_transform(size: int = 224):
     )
 
 
+def split_views(image: Image.Image, mask_path) -> list[Image.Image]:
+    """Cut a GrainSet image into its two kernel views.
+
+    A GrainSet file is one kernel photographed from both sides, side by side.
+    Feeding the pair to the classifier wastes half the resolution: the pair is
+    resized to a square input, so each view arrives at roughly half the pixels
+    it could have. That matters most for ``seed_coat_cracked``, whose defining
+    feature is a hairline split, and which is the weakest class in the baseline.
+
+    Splitting on the widest empty column band rather than the exact midpoint,
+    because the two views are not perfectly centred.
+    """
+    if mask_path is None:
+        return [image]
+
+    mask = np.array(Image.open(mask_path).convert("L")) > 127
+    columns = mask.any(axis=0)
+    if columns.all():
+        return [image]
+
+    # Find runs of empty columns and take the one nearest the middle.
+    middle = len(columns) / 2.0
+    best_run, current = None, None
+    for x, filled in enumerate(list(columns) + [True]):
+        if not filled and current is None:
+            current = x
+        elif filled and current is not None:
+            run = (current, x)
+            if run[1] - run[0] >= 2:
+                distance = abs((run[0] + run[1]) / 2.0 - middle)
+                if best_run is None or distance < best_run[0]:
+                    best_run = (distance, run)
+            current = None
+
+    if best_run is None:
+        return [image]
+
+    _, (start, end) = best_run
+    cut = (start + end) // 2
+    if cut < 8 or cut > image.width - 8:
+        return [image]
+    return [image.crop((0, 0, cut, image.height)), image.crop((cut, 0, image.width, image.height))]
+
+
 @dataclass
 class KernelDataset(Dataset):
     samples: list[Sample]
     transform: object
 
+    #: Cut paired GrainSet images into single views. During training a view is
+    #: chosen at random, which doubles as augmentation; during evaluation the
+    #: first view is always used so the metric is deterministic.
+    single_view: bool = False
+    train: bool = False
+
     def __len__(self) -> int:
         return len(self.samples)
 
     def __getitem__(self, i: int):
+        import random
+
         sample = self.samples[i]
         image = Image.open(sample.path).convert("RGB")
+
+        if self.single_view:
+            views = split_views(image, sample.mask)
+            image = random.choice(views) if self.train else views[0]
+
         return (
             self.transform(image),
             CLASS_INDEX[sample.class_name],
