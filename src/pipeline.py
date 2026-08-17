@@ -125,11 +125,18 @@ class LotReading:
     assessment: Assessment = field(repr=False)
 
     #: What the classifier reported before its bias was divided out, and the
-    #: rates that were divided out. Both ``None`` when the pipeline ran
-    #: uncalibrated, which is also when ``damage_mass_pct`` is the raw figure.
+    #: rates that were divided out. Left unset they fall back to the reading
+    #: itself, which is what an uncorrected reading's raw figure is -- so a
+    #: consumer never has to test for absence.
     raw_damage_mass_pct: float | None = None
     raw_damage_count_pct: float | None = None
     calibration: DamageCalibration | None = None
+
+    def __post_init__(self) -> None:
+        if self.raw_damage_mass_pct is None:
+            self.raw_damage_mass_pct = self.damage_mass_pct
+        if self.raw_damage_count_pct is None:
+            self.raw_damage_count_pct = self.damage_count_pct
 
     @property
     def resolvable_gap_pct(self) -> float:

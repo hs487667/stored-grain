@@ -210,3 +210,32 @@ def test_a_checkpoint_that_does_not_say_is_accepted():
     # Checkpoints predating the flag. Silence is not a claim of mismatch, and
     # refusing them would break every model already trained.
     assert_crop_framing({}) is None
+
+
+# --- Raw figures are always present ----------------------------------------
+
+def test_a_reading_built_without_a_correction_reports_itself_as_raw():
+    # An uncorrected reading is its own raw figure. Leaving these None would
+    # make every consumer test for it, and the first one to forget gets a
+    # TypeError halfway through a validation run.
+    reading = _reading("a", 7.5)
+    assert reading.raw_damage_mass_pct == pytest.approx(7.5)
+    assert reading.raw_damage_count_pct == pytest.approx(7.5)
+
+
+def test_an_explicit_raw_figure_is_kept():
+    reading = LotReading(
+        lot_id="a",
+        kernels_counted=200,
+        damage_mass_pct=6.0,
+        damage_count_pct=6.0,
+        biological_pct={},
+        class_counts={},
+        temperature_c=20.0,
+        moisture_pct_wb=14.0,
+        assessment=assess(6.0, 20.0, 14.0),
+        raw_damage_mass_pct=7.5,
+        raw_damage_count_pct=7.4,
+    )
+    assert reading.raw_damage_mass_pct == pytest.approx(7.5)
+    assert reading.raw_damage_count_pct == pytest.approx(7.4)
