@@ -236,16 +236,47 @@ def _validate(samples: list[Sample], val_fraction: float, test_fraction: float) 
         )
 
 
+def by_session(sample: Sample) -> str:
+    """One capture event -- a single tray moment, seconds long."""
+    return sample.session
+
+
+def by_day(sample: Sample) -> str:
+    """The calendar day of capture.
+
+    A much coarser unit than a session, and the one that actually tests what
+    Kumari et al. (2026) tested. A GrainSet session is a few seconds holding
+    several *different* kernels, so splitting on it still puts different
+    kernels either side and leaves nothing session-specific to memorise --
+    measured on this corpus, session and random splits score within 0.2 points
+    of each other. Holding out whole days separates different rig warm-ups,
+    calibrations and operator sessions, which is where acquisition shift
+    actually lives.
+
+    Corn Seeds carries no capture date, so its samples keep their kernel-level
+    key. Read the GrainSet figure when interpreting a day split.
+    """
+    return sample.session[:10] if sample.dataset == "grainset" else sample.session
+
+
 def build(
-    samples: list[Sample], *, val_fraction: float = 0.15, test_fraction: float = 0.15
+    samples: list[Sample],
+    *,
+    val_fraction: float = 0.15,
+    test_fraction: float = 0.15,
+    key=by_session,
 ) -> Manifest:
-    """Split by acquisition session. This is the one to use."""
+    """Split by a grouping key, so no group spans two splits.
+
+    ``key`` defaults to the capture session; pass :func:`by_day` for the
+    stricter holdout.
+    """
     _validate(samples, val_fraction, test_fraction)
     return Manifest(
         samples=tuple(samples),
-        strategy="session",
+        strategy=getattr(key, "__name__", "custom"),
         _assignment={
-            s.path: _assign(s.session, val_fraction, test_fraction) for s in samples
+            s.path: _assign(key(s), val_fraction, test_fraction) for s in samples
         },
     )
 

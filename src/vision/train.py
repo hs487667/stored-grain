@@ -25,7 +25,14 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchvision import models
 
-from src.data.manifest import build, load_cornseeds, load_grainset, random_split_baseline
+from src.data.manifest import (
+    build,
+    by_day,
+    by_session,
+    load_cornseeds,
+    load_grainset,
+    random_split_baseline,
+)
 from src.vision.dataset import (
     CLASS_NAMES,
     KernelDataset,
@@ -105,8 +112,14 @@ def evaluate(model, loader, dev) -> dict:
 
 def run(strategy: str, args) -> dict:
     samples = load_grainset(Path(args.grainset)) + load_cornseeds(Path(args.cornseeds))
-    make = build if strategy == "session" else random_split_baseline
-    manifest = make(samples)
+    if strategy == "session":
+        manifest = build(samples, key=by_session)
+    elif strategy == "day":
+        manifest = build(samples, key=by_day)
+    elif strategy == "random":
+        manifest = random_split_baseline(samples)
+    else:
+        raise ValueError(f"unknown split strategy {strategy!r}")
 
     train_samples = manifest.split("train")
     val_samples = manifest.split("val")
@@ -189,14 +202,18 @@ def main() -> None:
 
     results = {s: run(s, args) for s in args.strategies.split(",")}
 
-    if "session" in results and "random" in results:
-        gap = results["random"]["macro_f1"] - results["session"]["macro_f1"]
-        results["inflation_macro_f1"] = gap
-        print(
-            f"\nRandom-split macro-F1 exceeds session-split by {gap:+.4f}. "
-            f"The session figure is the one that estimates deployment.",
-            flush=True,
-        )
+    baseline = results.get("random")
+    if baseline:
+        for strategy in ("session", "day"):
+            if strategy in results:
+                gap = baseline["macro_f1"] - results[strategy]["macro_f1"]
+                results[f"inflation_vs_{strategy}"] = gap
+                print(
+                    f"\nRandom split scores {gap:+.4f} macro-F1 against the "
+                    f"{strategy} split. Positive means the random figure is "
+                    f"the optimistic one.",
+                    flush=True,
+                )
 
     Path(args.results).parent.mkdir(parents=True, exist_ok=True)
     Path(args.results).write_text(json.dumps(results, indent=2))
