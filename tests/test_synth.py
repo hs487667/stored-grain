@@ -240,3 +240,36 @@ def test_speckled_masks_still_get_placed():
     speckled.alpha[0, 0] = True
     scene = compose([speckled] * 30, kernel_px=25, seed=14)
     assert scene.placed > 0
+
+
+# --- Relative size is physical and must survive scaling --------------------
+# Regression: each cutout was resized individually to a common long axis,
+# which inflated an impurity (0.07 of a sound kernel's area) and a fragment
+# (0.47) to full kernel size. That erased a real cue, made the pipeline's
+# debris threshold meaningless, and produced trays unlike any photograph.
+
+def test_relative_sizes_survive_composition():
+    big = _cutout("sound", size=(40, 20))
+    small = _cutout("fragment", size=(20, 10), value=120)
+    scene = compose([big, small] * 25, kernel_px=40, seed=20)
+
+    from scipy import ndimage
+
+    areas = {"sound": [], "fragment": []}
+    for label in np.unique(scene.instances):
+        if label == 0:
+            continue
+        areas[scene.class_names[label - 1]].append(int((scene.instances == label).sum()))
+
+    ratio = np.median(areas["fragment"]) / np.median(areas["sound"])
+    # The cutouts differ 4x in area, so the placed kernels must too.
+    assert 0.15 < ratio < 0.35, ratio
+
+
+def test_scale_factor_is_anchored_on_sound_kernels():
+    from src.vision.synth import scale_factor
+
+    pool = [_cutout("sound", size=(40, 20))] * 5 + [_cutout("fragment", size=(8, 4))] * 20
+    # A pool dominated by tiny fragments must still scale by the sound kernel,
+    # or scenes stop being comparable across different class mixtures.
+    assert scale_factor(pool, 40) == pytest.approx(1.0)

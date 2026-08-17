@@ -154,13 +154,35 @@ class Scene:
             Image.fromarray(self.instances.astype(np.uint16)).save(instances_path)
 
 
+def scale_factor(cutouts: list[Cutout], kernel_px: int) -> float:
+    """One magnification for the whole scene, anchored on a sound kernel.
+
+    Every cutout must be scaled by the *same* factor, never resized
+    individually to a common length. Size is physically meaningful here and
+    differs sharply by class -- measured on the GrainSet maize cutouts, a
+    fragment covers 0.47 of a sound kernel's area and an impurity 0.07.
+    Normalising each cutout to the same long axis inflates a stone to the size
+    of a kernel and a broken piece to the size of a whole one, which destroys
+    a real cue, makes the debris threshold meaningless, and produces trays that
+    look nothing like a photograph.
+
+    The anchor is the median sound kernel where the pool has one, so scenes
+    stay comparable across pools with different class mixtures.
+    """
+    reference = [c for c in cutouts if c.class_name == "sound"] or cutouts
+    median_long_axis = float(np.median([max(c.alpha.shape) for c in reference]))
+    if median_long_axis <= 0:
+        return 1.0
+    return kernel_px / median_long_axis
+
+
 def _prepare(
-    cutout: Cutout, degrees: float, kernel_px: int | None
+    cutout: Cutout, degrees: float, scale: float | None
 ) -> tuple[np.ndarray, np.ndarray]:
-    """Scale a cutout to the scene's kernel size, then rotate it.
+    """Scale a cutout by the scene's magnification, then rotate it.
 
     Scaling matters for more than fitting kernels on a canvas. A GrainSet
-    cutout is roughly 600 px along its long axis because the P600 rig
+    cutout is roughly 440 px along its long axis because the P600 rig
     photographs one kernel at a time. In a real protocol frame of ~200 kernels
     a kernel spans a far smaller share of the image, so composing at native
     size would train the localiser on a magnification it will never see.
@@ -176,13 +198,10 @@ def _prepare(
     # learn and then lose the moment it sees a real photograph.
     alpha = alpha.filter(ImageFilter.MinFilter(3))
 
-    if kernel_px is not None:
-        long_axis = max(rgb.size)
-        if long_axis > 0:
-            scale = kernel_px / long_axis
-            new = (max(1, round(rgb.width * scale)), max(1, round(rgb.height * scale)))
-            rgb = rgb.resize(new, Image.LANCZOS)
-            alpha = alpha.resize(new, Image.NEAREST)
+    if scale is not None and scale != 1.0:
+        new = (max(1, round(rgb.width * scale)), max(1, round(rgb.height * scale)))
+        rgb = rgb.resize(new, Image.LANCZOS)
+        alpha = alpha.resize(new, Image.NEAREST)
 
     rgb = rgb.rotate(degrees, resample=Image.BILINEAR, expand=True)
     alpha = alpha.rotate(degrees, resample=Image.NEAREST, expand=True)
@@ -247,6 +266,7 @@ def compose(
     else:
         queue = [rng.choice(cutouts) for _ in range(n_kernels)]
 
+    scale = scale_factor(cutouts, kernel_px)
     height, width = size if size is not None else canvas_for(len(queue), kernel_px)
 
     image = np.zeros((height, width, 3), dtype=np.uint8)
@@ -256,7 +276,7 @@ def compose(
     scene = Scene(image=image, instances=instances, requested=len(queue))
 
     for cutout in queue:
-        rgb, alpha = _prepare(cutout, rng.uniform(0, 360), kernel_px)
+        rgb, alpha = _prepare(cutout, rng.uniform(0, 360), scale)
         h, w = alpha.shape
         if h >= height or w >= width:
             continue
