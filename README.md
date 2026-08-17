@@ -13,6 +13,16 @@ The primary output is a **ranking**. Absolute days-to-threshold is secondary and
 gated on `constants_verified` in `src/physics/constants.py`, which stays false
 until Thompson (1972) is checked against the original.
 
+Damage readings ship **uncorrected**. The classifier errs in both directions,
+which compresses every reading toward the middle of the range — a clean tray
+reads about 1.4% damaged and a 40% tray about 2.4 points low. That bias is
+affine and therefore invertible, and `src/calibrate_pipeline.py` fits the
+inverse. It is off by default because the fit does not transfer between
+acquisition sessions: three estimates of the same line, from the same corpus,
+range from `0.96 + 0.842x` to `4.75 + 0.774x`. Correcting with the wrong
+session's line is worse than not correcting. Fit it per session, against
+calibration trays photographed on the same rig on the same day.
+
 ## Layout
 
 - `src/physics/` — deterioration model. Pure arithmetic over published

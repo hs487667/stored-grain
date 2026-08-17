@@ -32,6 +32,7 @@ physics.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -199,6 +200,46 @@ class DamageMeasurement:
         if self.mechanical_damage_count_pct == 0.0:
             return 1.0
         return self.mechanical_damage_mass_pct / self.mechanical_damage_count_pct
+
+
+def damage_confusion(pairs: Iterable[tuple[str, str]]) -> dict[str, int]:
+    """Collapse ``(true, predicted)`` class names into a damaged/sound confusion.
+
+    The classifier has nine classes but the damage term has one boundary: a
+    kernel either carries mechanical damage or it does not. Error rates have to
+    be counted across *that* boundary, because confusing a fragment for a crack
+    costs the damage percentage nothing while confusing either for a sound
+    kernel costs it everything.
+
+    Non-kernel material is excluded from the base, matching :func:`measure`,
+    which sieves it out of both sides of the ratio. A kernel *predicted* to be
+    non-kernel is dropped before it reaches the damage count, so it reads as
+    undamaged -- the same thing the pipeline's debris threshold does to it.
+    """
+    counts = {
+        "damaged_total": 0,
+        "damaged_missed": 0,
+        "sound_total": 0,
+        "sound_flagged": 0,
+    }
+    for true_name, predicted_name in pairs:
+        for name in (true_name, predicted_name):
+            if name not in CLASSES:
+                raise ValueError(f"unknown class {name!r}; known: {sorted(CLASSES)}")
+
+        if CLASSES[true_name].admissibility is Admissibility.NON_KERNEL:
+            continue
+
+        called_damaged = (
+            CLASSES[predicted_name].admissibility is Admissibility.MECHANICAL
+        )
+        if CLASSES[true_name].admissibility is Admissibility.MECHANICAL:
+            counts["damaged_total"] += 1
+            counts["damaged_missed"] += not called_damaged
+        else:
+            counts["sound_total"] += 1
+            counts["sound_flagged"] += called_damaged
+    return counts
 
 
 def measure(class_counts: dict[str, int]) -> DamageMeasurement:

@@ -10,6 +10,7 @@ from src.mapping.classes import (
     CORNSEEDS,
     GRAINSET_MAIZE,
     Admissibility,
+    damage_confusion,
     measure,
     translate,
 )
@@ -110,3 +111,57 @@ def test_measure_rejects_an_unknown_class():
 def test_measure_rejects_a_sample_with_no_kernels():
     with pytest.raises(ValueError, match="no kernels"):
         measure({"impurity": 30})
+
+
+# --- Damage confusion ------------------------------------------------------
+# The classifier's error rates have to be counted the way the damage term is
+# computed, or the correction they feed is measuring a different quantity.
+
+def test_damage_confusion_counts_only_the_mechanical_boundary():
+    pairs = [
+        ("fragment", "seed_coat_cracked"),   # damaged, still damaged: correct
+        ("seed_coat_cracked", "sound"),      # damaged, called sound: missed
+        ("sound", "sound"),                  # sound, correct
+        ("sound", "fragment"),               # sound, called damaged: flagged
+    ]
+    assert damage_confusion(pairs) == {
+        "damaged_total": 2,
+        "damaged_missed": 1,
+        "sound_total": 2,
+        "sound_flagged": 1,
+    }
+
+
+def test_biological_classes_count_as_undamaged_for_the_damage_term():
+    # Mould is deterioration but not mechanical damage, so a kernel called
+    # mouldy contributes nothing to `MD` -- exactly like a sound one.
+    pairs = [("mould_suspect", "mould_suspect"), ("fragment", "mould_suspect")]
+    counts = damage_confusion(pairs)
+    assert counts["sound_total"] == 1
+    assert counts["sound_flagged"] == 0
+    assert counts["damaged_missed"] == 1
+
+
+def test_non_kernel_material_is_excluded_from_the_confusion():
+    # Impurities are sieved out before weighing and dropped before
+    # classification, so they belong in neither the numerator nor the base.
+    pairs = [("impurity", "impurity"), ("sound", "sound")]
+    counts = damage_confusion(pairs)
+    assert counts["sound_total"] == 1
+    assert counts["damaged_total"] == 0
+
+
+def test_a_kernel_predicted_to_be_debris_is_not_counted_as_damaged():
+    pairs = [("fragment", "impurity")]
+    counts = damage_confusion(pairs)
+    assert counts == {
+        "damaged_total": 1,
+        "damaged_missed": 1,
+        "sound_total": 0,
+        "sound_flagged": 0,
+    }
+
+
+def test_damage_confusion_rejects_an_unknown_class():
+    with pytest.raises(ValueError, match="unknown class"):
+        damage_confusion([("sound", "not_a_class")])

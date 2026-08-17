@@ -111,6 +111,143 @@ def biased_damage_pct(
     )
 
 
+def unbias_damage_pct(
+    measured_damage_pct: float, false_positive_rate: float, false_negative_rate: float
+) -> float:
+    """Invert :func:`biased_damage_pct`: the damage that would produce this reading.
+
+    The forward map is affine, so the inverse is too: ``d = (d' - FPR) / (1 -
+    FNR - FPR)``. It undoes the compression a two-sided classifier applies --
+    overstating clean samples by its false positives and understating damaged
+    ones by its false negatives -- which is what pulls every reading toward the
+    middle of the range.
+
+    This changes the absolute figure only. The map is monotone, so a corrected
+    reading ranks exactly where the raw one did; the correction earns its place
+    in the damage percentage the user is shown, not in the ordering.
+
+    Result is clamped to [0, 100]. Counting noise can put a reading below the
+    false-positive floor, which inverts to a negative damage -- a percentage
+    below zero is not a more precise measurement, it is an impossible one.
+    """
+    if not preserves_ordering(false_positive_rate, false_negative_rate):
+        raise ValueError(
+            "cannot unbias a classifier no better than a coin: "
+            f"FPR {false_positive_rate} + FNR {false_negative_rate} >= 1"
+        )
+    slope = 1.0 - false_negative_rate - false_positive_rate
+    corrected = (measured_damage_pct / 100.0 - false_positive_rate) / slope
+    return 100.0 * min(max(corrected, 0.0), 1.0)
+
+
+@dataclass(frozen=True)
+class DamageCalibration:
+    """A classifier's measured damage error rates, and the correction they buy.
+
+    Estimated by running the classifier over kernels held out from its own
+    training *and* from whatever it is later corrected on -- an error rate
+    measured on the evaluation set would flatter the correction rather than
+    test it.
+    """
+
+    false_positive_rate: float
+    false_negative_rate: float
+
+    #: Kernels the rates were measured over. Rates from a handful of kernels
+    #: are noise, and the correction is only as trustworthy as this number.
+    kernels: int
+
+    #: Which damage percentage these rates describe. ``count`` for rates from a
+    #: per-kernel confusion, ``mass`` for a line fitted against weighed trays.
+    #: Applying one to the other's basis is a real error where the damaged
+    #: population is fragments, since the two then live on different scales.
+    basis: str = "count"
+
+    def __post_init__(self) -> None:
+        if self.basis not in ("count", "mass"):
+            raise ValueError(f"basis must be 'count' or 'mass', got {self.basis!r}")
+
+    @classmethod
+    def from_affine(
+        cls,
+        *,
+        intercept_pct: float,
+        slope: float,
+        kernels: int,
+        basis: str = "mass",
+    ) -> "DamageCalibration":
+        """Rates from a line fitted to measured-against-true damage.
+
+        Fitting the whole pipeline rather than the classifier alone. The
+        localiser's crops are not the dataset's images -- they are cut from a
+        crowded tray, at whatever scale the kernels happened to occupy -- so the
+        classifier's error rates on clean dataset images understate what it
+        does downstream. A line fitted to trays of known damage absorbs every
+        stage's contribution at once.
+
+        The fitted line has the same two degrees of freedom as the per-kernel
+        map, so it is stored the same way: the intercept is what a sound tray
+        reads, and the slope is what a fully damaged one loses.
+        """
+        if slope <= 0.0:
+            raise ValueError(
+                f"slope must be positive to invert; got {slope}. A flat or "
+                "falling line means the reading carries no damage information."
+            )
+        fpr = intercept_pct / 100.0
+        return cls(
+            false_positive_rate=fpr,
+            false_negative_rate=1.0 - slope - fpr,
+            kernels=kernels,
+            basis=basis,
+        )
+
+    @classmethod
+    def from_counts(
+        cls,
+        *,
+        damaged_total: int,
+        damaged_missed: int,
+        sound_total: int,
+        sound_flagged: int,
+    ) -> "DamageCalibration":
+        """Rates from a binary damaged/not-damaged confusion count."""
+        if damaged_total <= 0 or sound_total <= 0:
+            raise ValueError("need both damaged and sound kernels to calibrate")
+        if not 0 <= damaged_missed <= damaged_total:
+            raise ValueError(f"{damaged_missed} missed of {damaged_total} damaged")
+        if not 0 <= sound_flagged <= sound_total:
+            raise ValueError(f"{sound_flagged} flagged of {sound_total} sound")
+        return cls(
+            false_positive_rate=sound_flagged / sound_total,
+            false_negative_rate=damaged_missed / damaged_total,
+            kernels=damaged_total + sound_total,
+        )
+
+    def correct(self, measured_damage_pct: float) -> float:
+        """The damage this reading implies, with the measured bias removed."""
+        return unbias_damage_pct(
+            measured_damage_pct, self.false_positive_rate, self.false_negative_rate
+        )
+
+    def to_dict(self) -> dict[str, float | int | str]:
+        return {
+            "false_positive_rate": self.false_positive_rate,
+            "false_negative_rate": self.false_negative_rate,
+            "kernels": self.kernels,
+            "basis": self.basis,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "DamageCalibration":
+        return cls(
+            false_positive_rate=float(data["false_positive_rate"]),
+            false_negative_rate=float(data["false_negative_rate"]),
+            kernels=int(data["kernels"]),
+            basis=str(data.get("basis", "count")),
+        )
+
+
 def preserves_ordering(false_positive_rate: float, false_negative_rate: float) -> bool:
     """Whether these error rates leave lot ordering intact.
 

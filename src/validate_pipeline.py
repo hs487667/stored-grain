@@ -40,6 +40,15 @@ def main() -> None:
     p.add_argument("--kernels", type=int, default=200)
     p.add_argument("--pool", type=int, default=400)
     p.add_argument("--results", default="models/pipeline-validation.json")
+    p.add_argument(
+        "--calibration",
+        default="",
+        help=(
+            "Bias correction to divide out. Off by default: the correction "
+            "does not transfer between acquisition sessions -- see the "
+            "docstring of src.calibrate_pipeline."
+        ),
+    )
     p.add_argument("--temperature", type=float, default=20.0)
     p.add_argument("--moisture", type=float, default=14.0)
     args = p.parse_args()
@@ -67,11 +76,18 @@ def main() -> None:
             flush=True,
         )
 
-    pipeline = Pipeline(args.localiser, args.classifier)
+    pipeline = Pipeline(args.localiser, args.classifier, calibration=args.calibration or None)
+    if pipeline.calibration is not None:
+        c = pipeline.calibration
+        print(
+            f"\ncalibration: FPR {c.false_positive_rate:.4f} "
+            f"FNR {c.false_negative_rate:.4f} over {c.kernels} held-out kernels",
+            flush=True,
+        )
 
     readings, rows = [], []
     print(
-        f"\n{'lot':>6}{'true%':>8}{'meas%':>8}{'err':>8}"
+        f"\n{'lot':>6}{'true%':>8}{'raw%':>8}{'meas%':>8}{'err':>8}"
         f"{'kernels':>9}{'truekern':>10}{'gap±':>7}",
         flush=True,
     )
@@ -83,13 +99,16 @@ def main() -> None:
             moisture_pct_wb=args.moisture,
         )
         readings.append(reading)
+        raw = reading.raw_damage_mass_pct
         error = reading.damage_mass_pct - truth.mechanical_damage_mass_pct
         rows.append(
             {
                 "lot": path.stem,
                 "true_damage_mass_pct": truth.mechanical_damage_mass_pct,
                 "measured_damage_mass_pct": reading.damage_mass_pct,
+                "raw_damage_mass_pct": raw,
                 "error_pct_points": error,
+                "raw_error_pct_points": raw - truth.mechanical_damage_mass_pct,
                 "kernels_counted": reading.kernels_counted,
                 "true_kernels": truth.kernels_counted,
                 "resolvable_gap_pct": reading.resolvable_gap_pct,
@@ -97,13 +116,14 @@ def main() -> None:
         )
         print(
             f"{path.stem[-2:]:>6}{truth.mechanical_damage_mass_pct:>8.2f}"
-            f"{reading.damage_mass_pct:>8.2f}{error:>+8.2f}"
+            f"{raw:>8.2f}{reading.damage_mass_pct:>8.2f}{error:>+8.2f}"
             f"{reading.kernels_counted:>9}{truth.kernels_counted:>10}"
             f"{reading.resolvable_gap_pct:>7.2f}",
             flush=True,
         )
 
     errors = np.array([r["error_pct_points"] for r in rows])
+    raw_errors = np.array([r["raw_error_pct_points"] for r in rows])
     true_order = [
         r["lot"]
         for r in sorted(rows, key=lambda r: r["true_damage_mass_pct"], reverse=True)
@@ -125,6 +145,10 @@ def main() -> None:
         "mean_abs_error_pct_points": float(np.mean(np.abs(errors))),
         "max_abs_error_pct_points": float(np.max(np.abs(errors))),
         "mean_signed_error_pct_points": float(np.mean(errors)),
+        "raw_mean_abs_error_pct_points": float(np.mean(np.abs(raw_errors))),
+        "raw_max_abs_error_pct_points": float(np.max(np.abs(raw_errors))),
+        "raw_mean_signed_error_pct_points": float(np.mean(raw_errors)),
+        "calibrated": pipeline.calibration is not None,
         "ranking_correct": predicted_order == true_order,
         "true_order": true_order,
         "predicted_order": predicted_order,

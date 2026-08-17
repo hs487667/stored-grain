@@ -24,6 +24,7 @@ honestly be ordered. Ties are reported as ties rather than invented.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -31,8 +32,8 @@ import numpy as np
 import torch
 from PIL import Image
 
-from src.mapping.classes import measure
-from src.measurement.sampling import resolution
+from src.mapping.classes import DamageMeasurement, measure
+from src.measurement.sampling import DamageCalibration, resolution
 from src.physics.deterioration import Assessment, assess
 from src.vision.dataset import CLASS_NAMES, eval_transform
 from src.vision.evaluate_localiser import predict_scene
@@ -40,6 +41,48 @@ from src.vision.localise import UNet, instances_from_logits
 
 #: A predicted kernel smaller than this fraction of the median is debris.
 MIN_RELATIVE_AREA = 0.15
+
+
+@dataclass(frozen=True)
+class CorrectedDamage:
+    """Damage after the classifier's own error rates are divided out."""
+
+    mass_pct: float
+    count_pct: float
+
+
+def correct_measurement(
+    measurement: DamageMeasurement, calibration: DamageCalibration | None
+) -> CorrectedDamage:
+    """Remove the classifier's systematic bias from a damage measurement.
+
+    The error rates are counted per kernel, so the correction belongs on the
+    count basis; the mass figure follows by the same count-to-mass ratio the
+    measurement already carries. Correcting the mass percentage directly would
+    subtract a count-basis false-positive floor from a mass-basis number, and
+    where the damaged population is mostly fragments those two live on
+    different scales.
+
+    Without a calibration the measurement passes through untouched. An
+    uncorrected reading is honest -- it is simply the raw one -- and a wrong
+    correction is not, so the pipeline runs without one rather than assuming.
+    """
+    if calibration is None:
+        return CorrectedDamage(
+            mass_pct=measurement.mechanical_damage_mass_pct,
+            count_pct=measurement.mechanical_damage_count_pct,
+        )
+    if calibration.basis == "mass":
+        mass_pct = calibration.correct(measurement.mechanical_damage_mass_pct)
+        return CorrectedDamage(
+            mass_pct=mass_pct,
+            count_pct=mass_pct / measurement.count_to_mass_ratio,
+        )
+    count_pct = calibration.correct(measurement.mechanical_damage_count_pct)
+    return CorrectedDamage(
+        mass_pct=count_pct * measurement.count_to_mass_ratio,
+        count_pct=count_pct,
+    )
 
 
 @dataclass
@@ -57,6 +100,13 @@ class LotReading:
     moisture_pct_wb: float
 
     assessment: Assessment = field(repr=False)
+
+    #: What the classifier reported before its bias was divided out, and the
+    #: rates that were divided out. Both ``None`` when the pipeline ran
+    #: uncalibrated, which is also when ``damage_mass_pct`` is the raw figure.
+    raw_damage_mass_pct: float | None = None
+    raw_damage_count_pct: float | None = None
+    calibration: DamageCalibration | None = None
 
     @property
     def resolvable_gap_pct(self) -> float:
@@ -84,8 +134,15 @@ class Pipeline:
         classifier_checkpoint: str | Path = "models/classifier.session.pt",
         device: torch.device | None = None,
         batch_size: int = 128,
+        calibration: DamageCalibration | str | Path | None = None,
     ):
         from torchvision import models as tv
+
+        if isinstance(calibration, (str, Path)):
+            calibration = DamageCalibration.from_dict(
+                json.loads(Path(calibration).read_text())
+            )
+        self.calibration = calibration
 
         self.device = device or (
             torch.device("mps") if torch.backends.mps.is_available() else torch.device("cpu")
@@ -148,20 +205,22 @@ class Pipeline:
             counts[name] = counts.get(name, 0) + 1
 
         measurement = measure(counts)
-        assessment = assess(
-            measurement.mechanical_damage_mass_pct, temperature_c, moisture_pct_wb
-        )
+        corrected = correct_measurement(measurement, self.calibration)
+        assessment = assess(corrected.mass_pct, temperature_c, moisture_pct_wb)
 
         return LotReading(
             lot_id=lot_id,
             kernels_counted=measurement.kernels_counted,
-            damage_mass_pct=measurement.mechanical_damage_mass_pct,
-            damage_count_pct=measurement.mechanical_damage_count_pct,
+            damage_mass_pct=corrected.mass_pct,
+            damage_count_pct=corrected.count_pct,
             biological_pct=measurement.biological_count_pct,
             class_counts=counts,
             temperature_c=temperature_c,
             moisture_pct_wb=moisture_pct_wb,
             assessment=assessment,
+            raw_damage_mass_pct=measurement.mechanical_damage_mass_pct,
+            raw_damage_count_pct=measurement.mechanical_damage_count_pct,
+            calibration=self.calibration,
         )
 
 
