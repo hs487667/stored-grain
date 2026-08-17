@@ -37,6 +37,7 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageFilter
+from scipy import ndimage
 
 from src.data.manifest import Sample
 from src.mapping.classes import CLASSES, Admissibility, measure
@@ -239,13 +240,36 @@ def compose(
             if covered / alpha.sum() > max_overlap:
                 continue
 
-            # Later kernels occlude earlier ones, which is what happens when
-            # one kernel rests against another.
+            # The visible part of this kernel must stay in one piece. A kernel
+            # already on the card can lie across the middle of where this one
+            # would go, leaving two separated slivers -- one instance, two
+            # blobs, and a counting target that cannot be learned. Rejecting
+            # the position is cheaper than repairing the scene afterwards.
+            free = alpha & (window == 0)
+            if not free.any():
+                continue
+            _, pieces = ndimage.label(free)
+            if pieces != 1:
+                continue
+
+            # Paint only into pixels no kernel has claimed. Kernels abut, they
+            # never stack -- which is what the capture protocol demands of a
+            # real tray ("kernels may touch; they must not stack", since a
+            # kernel hidden underneath is invisible and breaks the match
+            # between the weighed damage fraction and the visible one).
+            #
+            # This is not a cosmetic choice. Letting a later kernel overwrite
+            # an earlier one caps how much the *new* kernel is covered but not
+            # how much it covers its neighbours, so at realistic density an
+            # early kernel is nibbled by many later ones until its instance is
+            # shattered into disconnected fragments. Measured before this fix:
+            # every instance in a scene averaged 2.55 visible pieces, which
+            # made the counting target unlearnable.
             scene.placed += 1
             scene.class_names.append(cutout.class_name)
             region = scene.image[top : top + h, left : left + w]
-            region[alpha] = rgb[alpha]
-            window[alpha] = scene.placed
+            region[free] = rgb[free]
+            window[free] = scene.placed
             break
 
     return scene

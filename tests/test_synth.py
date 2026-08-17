@@ -140,3 +140,40 @@ def test_zero_overlap_still_places_kernels():
 
 def test_mechanical_set_comes_from_the_mapping_layer():
     assert MECHANICAL == {"seed_coat_cracked", "fragment"}
+
+
+# --- Instances must stay in one piece -------------------------------------
+# Regression: kernels used to overwrite their neighbours, so at realistic
+# density an early kernel was nibbled by later ones until its instance was
+# shattered into disconnected fragments -- 2.55 visible pieces per instance,
+# measured. The counting target was unlearnable as a result.
+
+def test_every_instance_is_a_single_connected_blob():
+    from scipy import ndimage
+
+    scene = compose(_pool(), n_kernels=120, kernel_px=30, seed=11)
+    for label in np.unique(scene.instances):
+        if label == 0:
+            continue
+        _, pieces = ndimage.label(scene.instances == label)
+        assert pieces == 1, f"instance {label} split into {pieces} pieces"
+
+
+def test_kernels_never_stack():
+    scene = compose(_pool(), n_kernels=120, kernel_px=30, seed=12)
+    ids = set(np.unique(scene.instances)) - {0}
+    assert len(ids) == scene.placed
+
+
+def test_dense_scenes_still_keep_instances_whole():
+    from scipy import ndimage
+
+    # Deliberately crowded: the density at which the old bug appeared.
+    scene = compose(_pool(), n_kernels=300, kernel_px=30, size=(400, 400), seed=13)
+    broken = 0
+    for label in np.unique(scene.instances):
+        if label == 0:
+            continue
+        _, pieces = ndimage.label(scene.instances == label)
+        broken += pieces > 1
+    assert broken == 0
