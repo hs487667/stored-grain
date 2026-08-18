@@ -5,13 +5,21 @@ input to a published deterioration model, ranking storage lots by how fast they
 are degrading.
 
 **Hybrid** because only the vision half learns anything. Temperature, moisture
-and storage duration never touch a model — they go into Thompson's published
-equation. That split is deliberate and is what lets the results be defended
+and storage duration never touch a model — they go into Steele's published
+equations. That split is deliberate and is what lets the results be defended
 without a storage trial.
 
-The primary output is a **ranking**. Absolute days-to-threshold is secondary and
-gated on `constants_verified` in `src/physics/constants.py`, which stays false
-until Thompson (1972) is checked against the original.
+The primary output is a **ranking**, because it survives inputs outside the
+published validity ranges and dried bagged maize often sits below the moisture
+floor. Absolute days-to-threshold is secondary: it appears whenever the inputs
+are in range, comes from Steele's own reference times (1967, p. 108), and never
+appears without his stated standard error beside it.
+
+`src/physics/steele_agreement.py` checks the whole model against numbers Steele
+published — his worked multiplier values, his Table 9 adjustments, and nine
+measured storage lives. Run it to print the table:
+
+    PYTHONPATH=$PWD .venv/bin/python -m src.physics.steele_agreement
 
 Damage readings ship **uncorrected**. The classifier errs in both directions,
 which compresses every reading toward the middle of the range — a clean tray

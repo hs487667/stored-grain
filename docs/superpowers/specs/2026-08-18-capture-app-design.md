@@ -86,7 +86,8 @@ returns today. Existing callers and the 139 passing tests are untouched.
 A reading serialises as: `lot_id`, `kernels_counted`, `damage_mass_pct`,
 `damage_count_pct`, `raw_damage_mass_pct`, `biological_pct`, `class_counts`,
 `temperature_c`, `moisture_pct_wb`, `resolvable_gap_pct`, `mode`,
-`degradation_rate`, `days_to_threshold` (null while gated), and `calibrated`.
+`degradation_rate`, `days_to_threshold` (null only when an input is out of
+range -- see the 18 August note below), and `calibrated`.
 
 The ranking response carries, per lot, its rank, the lots it is tied with, and
 the degradation rate it was ordered on.
@@ -101,9 +102,15 @@ part of the design rather than presentation polish:
    composed from one laboratory imaging rig. No phone photograph has ever been
    validated against ground truth. Every number the app shows is provisional
    and the banner says so without being dismissible.
-2. **Ranking is the output; days are gated.** `mode` is displayed. Where
-   absolute days would go, the app shows that `constants_verified` is false and
-   why — Thompson's DML coefficients are unverified.
+2. **Ranking is the output; days are secondary.** `mode` is displayed. Days to
+   threshold shows with Steele's standard error inline, and standing caveats
+   about the model render as a source line rather than as a warning. Where an
+   out-of-range input withholds the figure, the app says which input and why.
+
+   *Superseded 18 August:* this originally read "where absolute days would go,
+   the app shows that `constants_verified` is false", because days were gated
+   on Thompson (1972). They no longer are — Steele's own reference times reach
+   the same answer from a source already on disk. See handoff §10d.
 3. **Ties are shown as ties.** `rank_lots` already refuses to order lots closer
    than the sampling noise. The UI renders that refusal rather than presenting
    an arbitrary order as a result.
