@@ -27,7 +27,7 @@
   var currentSession = { lots: [], ranking: [] };
   var shownReading = null;
   var shownOverlaySrc = null;
-  var currentStatus = null;
+  var statusMessage = window.GrainI18n.createMessageState();
 
   // ---------------------------------------------------------------- helpers
 
@@ -56,9 +56,9 @@
       : "—";
   }
 
-  function setStatus(tone, text) {
-    currentStatus = { tone: tone, text: text };
-    statusEl.textContent = text;
+  function setStatus(tone, descriptor) {
+    statusMessage.set(descriptor);
+    statusEl.textContent = statusMessage.render();
     if (tone) {
       statusEl.setAttribute("data-tone", tone);
     } else {
@@ -67,16 +67,11 @@
   }
 
   function setTranslatedStatus(tone, key, values) {
-    currentStatus = { tone: tone, key: key, values: values || {} };
-    statusEl.textContent = t(key, values);
-    if (tone) statusEl.setAttribute("data-tone", tone);
-    else statusEl.removeAttribute("data-tone");
+    setStatus(tone, { key: key, values: values || {} });
   }
 
   function rerenderStatus() {
-    if (currentStatus && currentStatus.key) {
-      statusEl.textContent = t(currentStatus.key, currentStatus.values);
-    }
+    statusEl.textContent = statusMessage.render();
   }
 
   function wait(ms) {
@@ -94,23 +89,22 @@
 
   // ------------------------------------------------------------- API errors
 
-  // Carries a human sentence already fit for #status, so callers never have to
-  // interpret a status code or a rejected fetch a second time.
-  function ApiError(message) {
+  function ApiError(descriptor) {
     this.name = "ApiError";
-    this.message = message;
+    this.descriptor = descriptor;
+    this.message = window.GrainI18n.message(descriptor);
   }
   ApiError.prototype = Object.create(Error.prototype);
 
   function messageForStatus(status, detail) {
-    if (status === 415) return t("error.not_image");
-    if (status === 422) return t("error.no_kernels");
-    if (status === 413) return t("error.photo_too_large");
-    if (status === 429) return t("error.too_many");
-    if (status >= 500) return t("error.server_unavailable");
-    if (detail) return detail;
-    if (status === 404) return t("error.server_request");
-    return t("error.rejected", { status: status });
+    if (status === 415) return { key: "error.not_image" };
+    if (status === 422) return { key: "error.no_kernels" };
+    if (status === 413) return { key: "error.photo_too_large" };
+    if (status === 429) return { key: "error.too_many" };
+    if (status >= 500) return { key: "error.server_unavailable" };
+    if (detail) return { fallback: detail };
+    if (status === 404) return { key: "error.server_request" };
+    return { key: "error.rejected", values: { status: status } };
   }
 
   function readDetail(response) {
@@ -138,7 +132,7 @@
         if (response.ok) {
           if (response.status === 204) return null;
           return response.json().catch(function () {
-            throw new ApiError(t("error.bad_reply"));
+            throw new ApiError({ key: "error.bad_reply" });
           });
         }
         return readDetail(response).then(function (detail) {
@@ -146,13 +140,19 @@
         });
       },
       function () {
-        throw new ApiError(t("error.network"));
+        throw new ApiError({ key: "error.network" });
       }
     );
   }
 
+  function errorDescriptor(err) {
+    if (err && err.descriptor) return err.descriptor;
+    if (err && err.message) return { fallback: err.message };
+    return { key: "error.unknown" };
+  }
+
   function errorText(err) {
-    return err && err.message ? err.message : t("error.unknown");
+    return window.GrainI18n.message(errorDescriptor(err));
   }
 
   // ------------------------------------------------------------- tie groups
@@ -470,7 +470,7 @@
     transfer.items.add(file);
     photoInput.files = transfer.files;
     showChosenFile(file);
-    setStatus(null, "");
+    setStatus(null, null);
   }
 
   photoInput.addEventListener("change", function () {
@@ -507,10 +507,10 @@
   // ------------------------------------------------------------- measuring
 
   function firstProblem() {
-    if (!lotInput.value.trim()) return t("validation.lot");
-    if (!photoInput.files || !photoInput.files[0]) return t("validation.photo");
-    if (!isFinite(parseFloat(tempInput.value))) return t("validation.temperature");
-    if (!isFinite(parseFloat(moistInput.value))) return t("validation.moisture");
+    if (!lotInput.value.trim()) return { key: "validation.lot" };
+    if (!photoInput.files || !photoInput.files[0]) return { key: "validation.photo" };
+    if (!isFinite(parseFloat(tempInput.value))) return { key: "validation.temperature" };
+    if (!isFinite(parseFloat(moistInput.value))) return { key: "validation.moisture" };
     return null;
   }
 
@@ -562,7 +562,7 @@
       })
       .catch(function (err) {
         clearReading();
-        setStatus("error", errorText(err));
+        setStatus("error", errorDescriptor(err));
       })
       .then(function () {
         URL.revokeObjectURL(previewUrl);
@@ -589,7 +589,7 @@
         setTranslatedStatus("done", "status.removed", { lot: lotId });
       })
       .catch(function (err) {
-        setStatus("error", errorText(err));
+        setStatus("error", errorDescriptor(err));
       })
       .then(function () {
         setBusy(false);
@@ -612,7 +612,7 @@
         setTranslatedStatus("done", "status.cleared");
       })
       .catch(function (err) {
-        setStatus("error", errorText(err));
+        setStatus("error", errorDescriptor(err));
       })
       .then(function () {
         setBusy(false);
@@ -621,7 +621,7 @@
 
   // ----------------------------------------------------------------- start
 
-  window.GrainI18n.init().then(function () {
+  function start() {
     window.GrainI18n.subscribe(function () {
       renderRanking(currentSession.ranking);
       if (shownReading) resultBody.innerHTML = readingMarkup(shownReading, shownOverlaySrc);
@@ -643,10 +643,10 @@
 
     refreshSession().catch(function (err) {
       rankingBody.innerHTML = '<p class="empty">' + esc(errorText(err)) + "</p>";
-      setStatus("error", errorText(err));
+      setStatus("error", errorDescriptor(err));
     });
-  }).catch(function () {
-    setStatus("error", "Could not load the selected language.");
-  });
+  }
+
+  window.GrainI18n.init().then(start, start);
 
 }());

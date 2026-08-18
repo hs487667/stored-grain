@@ -90,3 +90,49 @@ def test_model_warning_prose_is_localized(locale):
     )
     assert "wet basis" not in moisture
     assert "dry-matter-loss" not in estimate
+
+
+@pytest.mark.parametrize(
+    ("locale", "boundary_markers", "ranking_markers", "footer_markers"),
+    [
+        (
+            "en",
+            ("synthetic trays", "laboratory rig", "phone photograph", "ground truth", "provisional"),
+            ("degradation rate", "Steele", "temperature", "moisture", "damage ranges"),
+            ("published deterioration model", "hand-counting", "measurement", "not the storage model"),
+        ),
+        (
+            "hi",
+            ("कृत्रिम ट्रे", "प्रयोगशाला", "फ़ोन", "ग्राउंड ट्रुथ", "अस्थायी"),
+            ("क्षरण दर", "Steele", "तापमान", "नमी", "क्षति"),
+            ("प्रकाशित क्षरण मॉडल", "हाथ से", "मापन", "भंडारण मॉडल नहीं"),
+        ),
+        (
+            "te",
+            ("కృత్రిమ ట్రే", "ప్రయోగశాల", "ఫోన్", "గ్రౌండ్ ట్రూత్", "తాత్కాలిక"),
+            ("క్షీణత రేటు", "Steele", "ఉష్ణోగ్రత", "తేమ", "నష్టం"),
+            ("ప్రచురిత క్షీణత నమూనా", "చేతితో", "కొలత", "నిల్వ నమూనాను కాదు"),
+        ),
+    ],
+)
+def test_interface_preserves_scientific_boundary_copy(
+    locale, boundary_markers, ranking_markers, footer_markers
+):
+    assert all(marker in translate(locale, "boundary.text") for marker in boundary_markers)
+    assert all(
+        marker in translate(locale, "ranking.description") for marker in ranking_markers
+    )
+    assert all(marker in translate(locale, "footer.description") for marker in footer_markers)
+
+
+@pytest.mark.parametrize(
+    ("locale", "markers"),
+    [
+        ("en", ("Steele (1967)", "Appendix D", "page 108", "Thompson (1972)", "not been obtained", "not used")),
+        ("hi", ("Steele (1967)", "परिशिष्ट D", "पृष्ठ 108", "Thompson (1972)", "प्राप्त नहीं", "उपयोग नहीं")),
+        ("te", ("Steele (1967)", "అనుబంధం D", "108వ పేజీ", "Thompson (1972)", "పొందలేదు", "ఉపయోగించలేదు")),
+    ],
+)
+def test_steele_warning_keeps_source_and_missing_model_caveats(locale, markers):
+    warning = translate(locale, "message.model.steele_only")
+    assert all(marker in warning for marker in markers)
