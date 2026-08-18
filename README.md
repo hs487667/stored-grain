@@ -46,8 +46,9 @@ refuses a mismatch, because macro-F1 does not show it.
 
 ## The capture app
 
-`src/app/` serves a phone-facing page that photographs a tray and ranks lots.
-See `src/app/README.md` for how to run it and reach it from a phone.
+`src/app/` serves a phone-facing page that photographs a tray, ranks lots, and
+downloads the current visitor's evidence as PDF or CSV. See `src/app/README.md`
+for how to run it and reach it from a phone.
 
 ## Running the tests
 

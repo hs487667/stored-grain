@@ -14,6 +14,12 @@ the phone works and needs no wifi.
 Models load on the first photograph, not at startup, so the first measurement
 takes about three seconds and the rest about two.
 
+After at least one lot is measured, the ranking panel offers PDF and CSV
+downloads. Both reports are scoped to the current browser session and include
+the rank, entered storage conditions, measured damage, kernel count,
+measurement resolution, degradation result, days-to-threshold when available,
+and the model's warnings. Empty sessions return no report.
+
 ## Reaching it from outside the network
 
 A tunnel publishes the local server on an HTTPS URL without deploying
@@ -27,20 +33,20 @@ is the point: a real deploy would have to ship 120 MB of checkpoints and a
 It prints a `https://<name>.trycloudflare.com` address that works from any
 network. Free, and no account for a quick tunnel.
 
-**Do not use a tunnel for the November review.** A lecture room demonstration
+**Do not depend on a tunnel for the November review.** A lecture room demonstration
 should not depend on Cloudflare and campus internet both working at the same
 minute. Use the LAN address, or a personal hotspot with the Mac joined to it,
 and test that path in the room beforehand.
 
-Two things must be fixed before the tunnel is pointed at anyone else:
-the session is process-wide, so every visitor shares one set of lots (see
-`store.py`), and uploads are neither size-capped nor rate-limited, so a public
-URL invites arbitrary images through a neural network on this machine.
+Visitor data is isolated by an HTTP-only session cookie. Upload byte and decoded
+pixel limits, rate limiting, and session expiry are enforced by the server.
+This still is a local capstone demonstration, not a production deployment.
 
 ## What it does not do
 
-No persistence: a session lives in the process. No per-session calibration
-mode; that becomes useful only once weighed mixtures exist to photograph.
+No durable persistence: sessions live in the process and expire. No
+per-session calibration mode; that becomes useful only once weighed mixtures
+exist to photograph.
 
 ## The numbers it shows
 
