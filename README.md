@@ -36,6 +36,11 @@ refuses a mismatch, because macro-F1 does not show it.
 - `tests/` — each test pins a specific way the model can be silently wrong.
 - `data/raw/grainset/` — GrainSet maize subset and its data card (gitignored).
 
+## The capture app
+
+`src/app/` serves a phone-facing page that photographs a tray and ranks lots.
+See `src/app/README.md` for how to run it and reach it from a phone.
+
 ## Running the tests
 
     python3 -m venv .venv
