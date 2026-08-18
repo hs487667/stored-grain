@@ -213,8 +213,30 @@ def test_page_exposes_accessible_non_persistent_language_choices(client):
     assert 'data-locale="te"' in response.text
     assert "हिन्दी" in response.text
     assert "తెలుగు" in response.text
-    assert 'src="/static/i18n.js"' in response.text
+    assert 'src="/static/i18n.js?v=20260819-ui2"' in response.text
     assert "localStorage" not in response.text
+
+
+def test_page_cache_busts_frontend_assets_after_ui_updates(client):
+    response = client.get("/")
+
+    assert 'href="/static/app.css?v=20260819-ui2"' in response.text
+    assert 'src="/static/app.js?v=20260819-ui2"' in response.text
+
+
+def test_language_choices_share_the_right_side_utility_rail(client):
+    response = client.get("/")
+    utility_start = response.text.index('<div class="topbar-actions">')
+    prototype = response.text.index('class="build-state"', utility_start)
+    languages = response.text.index('class="language-switcher"', prototype)
+
+    assert utility_start < prototype < languages
+
+
+def test_page_does_not_render_a_validation_warning_banner(client):
+    response = client.get("/")
+
+    assert 'class="provenance"' not in response.text
 
 
 def test_the_models_are_loaded_once_not_per_photograph():

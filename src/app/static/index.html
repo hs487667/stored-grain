@@ -7,7 +7,7 @@
 <meta name="theme-color" content="#103a2b">
 <meta name="description" content="Measure mechanical damage in shelled maize from a photograph, and rank storage lots by how fast they are degrading." data-i18n-content="meta.description">
 <title data-i18n="meta.title">Maize field assay</title>
-<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/app.css?v=20260819-ui2">
 </head>
 <body>
 
@@ -15,17 +15,14 @@
 
 <div class="topbar">
   <p class="brand"><span class="brand-mark" aria-hidden="true"></span><span data-i18n="topbar.brand">Grain field assay</span></p>
-  <div class="language-switcher" role="group" aria-label="Language" data-i18n-aria-label="language.aria">
-    <button type="button" data-locale="en" aria-pressed="true">English</button>
-    <button type="button" data-locale="hi" aria-pressed="false">हिन्दी</button>
-    <button type="button" data-locale="te" aria-pressed="false">తెలుగు</button>
+  <div class="topbar-actions">
+    <p class="build-state"><span aria-hidden="true"></span><span data-i18n="topbar.prototype">Research prototype</span></p>
+    <div class="language-switcher" role="group" aria-label="Language" data-i18n-aria-label="language.aria">
+      <button type="button" data-locale="en" aria-pressed="true">English</button>
+      <button type="button" data-locale="hi" aria-pressed="false">हिन्दी</button>
+      <button type="button" data-locale="te" aria-pressed="false">తెలుగు</button>
+    </div>
   </div>
-  <p class="build-state"><span aria-hidden="true"></span><span data-i18n="topbar.prototype">Research prototype</span></p>
-</div>
-
-<div class="provenance" role="note">
-  <span class="provenance-mark" aria-hidden="true">!</span>
-  <p><strong data-i18n="boundary.label">Validation boundary</strong> — <span data-i18n="boundary.text">trained on synthetic trays from one laboratory rig. No phone photograph has been validated against ground truth; every number is provisional.</span></p>
 </div>
 
 <header class="masthead">
@@ -139,7 +136,7 @@
   </p>
 </footer>
 
-<script src="/static/i18n.js"></script>
-<script src="/static/app.js"></script>
+<script src="/static/i18n.js?v=20260819-ui2"></script>
+<script src="/static/app.js?v=20260819-ui2"></script>
 </body>
 </html>

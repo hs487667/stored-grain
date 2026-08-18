@@ -69,7 +69,6 @@ strong { color: inherit; font-weight: 700; }
 [hidden] { display: none !important; }
 
 .topbar,
-.provenance,
 .masthead,
 .shell,
 .colophon {
@@ -142,27 +141,53 @@ input,
   text-transform: uppercase;
 }
 
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--s4);
+  margin-inline-start: auto;
+}
+
 .language-switcher {
   display: flex;
-  align-items: stretch;
-  overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.32);
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .language-switcher button {
   min-block-size: 44px;
   padding-inline: var(--s3);
   border: 0;
-  border-inline-end: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 5px;
   background: transparent;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(255, 255, 255, 0.72);
   cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
   white-space: nowrap;
+  transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
 }
 
-.language-switcher button:last-child { border-inline-end: 0; }
-.language-switcher button[aria-pressed="true"] { background: var(--maize); color: var(--forest-950); font-weight: 700; }
+.language-switcher button[data-locale="hi"],
+.language-switcher button[data-locale="te"] {
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  letter-spacing: normal;
+}
+
+.language-switcher button:hover { background: rgba(255, 255, 255, 0.09); color: var(--white); }
+.language-switcher button[aria-pressed="true"] {
+  background: var(--maize);
+  color: var(--forest-950);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18), 0 3px 10px rgba(0, 0, 0, 0.16);
+}
 .language-switcher button:focus-visible { position: relative; z-index: 1; outline-offset: -3px; }
 
 .brand-mark {
@@ -213,35 +238,6 @@ html:lang(te) .stage-copy small {
   font-family: var(--sans);
   letter-spacing: normal;
   text-transform: none;
-}
-
-/* Validation boundary */
-
-.provenance {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  padding-block: 0.7rem;
-  background: var(--maize-soft);
-  color: #5b4915;
-  border-block-end: 1px solid rgba(136, 101, 7, 0.2);
-  font-size: 0.78rem;
-  line-height: 1.45;
-}
-
-.provenance p { max-inline-size: 108ch; }
-
-.provenance-mark {
-  display: grid;
-  place-items: center;
-  flex: none;
-  inline-size: 1.5rem;
-  block-size: 1.5rem;
-  border: 1px solid currentColor;
-  border-radius: 50%;
-  font-family: var(--mono);
-  font-size: 0.7rem;
-  font-weight: 800;
 }
 
 /* Hero: the three-stage field instrument */
@@ -1101,19 +1097,16 @@ input[type="number"]::-webkit-inner-spin-button { appearance: none; margin: 0; }
 
 @media (max-width: 580px) {
   :root { --gutter: 1rem; --radius: 12px; }
-  .topbar { flex-wrap: wrap; min-block-size: 48px; padding-block: var(--s2); }
-  .brand, .build-state {
-    flex: 1 1 calc(50% - var(--s2));
-    max-inline-size: calc(50% - var(--s2));
-    min-inline-size: 0;
-    font-size: 0.58rem;
-    white-space: normal;
-  }
-  .build-state { justify-content: flex-end; text-align: end; }
-  .brand > span:last-child, .build-state > span:last-child { min-inline-size: 0; overflow-wrap: anywhere; }
-  .language-switcher { flex: 1 0 100%; order: 3; inline-size: 100%; }
-  .language-switcher button { flex: 1 1 0; padding-inline: var(--s2); }
-  .provenance { align-items: flex-start; font-size: 0.71rem; }
+  .topbar { flex-wrap: nowrap; min-block-size: 56px; gap: var(--s2); padding-block: 5px; }
+  .brand { min-inline-size: 0; font-size: 0.56rem; white-space: normal; }
+  .brand > span:last-child { min-inline-size: 0; overflow-wrap: anywhere; }
+  .topbar-actions { flex: none; gap: var(--s2); }
+  .build-state { flex: none; }
+  .build-state > span:last-child { display: none; }
+  .language-switcher { padding: 2px; }
+  .language-switcher button { min-block-size: 40px; padding-inline: clamp(0.35rem, 2vw, 0.6rem); font-size: 0.64rem; }
+  .language-switcher button[data-locale="hi"],
+  .language-switcher button[data-locale="te"] { font-size: 0.7rem; }
   .masthead { padding-block: var(--s7); }
   .wordmark { font-size: clamp(3rem, 15vw, 4.5rem); }
   html:lang(hi) .wordmark,
