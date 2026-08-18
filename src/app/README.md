@@ -17,8 +17,9 @@ takes about three seconds and the rest about two.
 After at least one lot is measured, the ranking panel offers PDF and CSV
 downloads. Both reports are scoped to the current browser session and include
 the rank, entered storage conditions, measured damage, kernel count,
-measurement resolution, degradation result, days-to-threshold when available,
-and the model's warnings. Empty sessions return no report.
+measurement resolution, degradation result, and days-to-threshold when
+available. The CSV retains the model-warning fields for analysis; the
+presentation-focused PDF omits notes. Empty sessions return no report.
 
 ## Reaching it from outside the network
 
