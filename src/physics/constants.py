@@ -185,9 +185,8 @@ CONSTANTS_VERIFIED = False
 #: Why it is still False, surfaced in the research view so a reviewer or
 #: examiner can see the reasoning rather than guess at it.
 CONSTANTS_VERIFIED_NOTE = (
-    "Thompson (1972) has not been obtained, so the dry-matter-loss curve is "
-    "unavailable and loss cannot be plotted against elapsed time. Days to "
-    "threshold does not use that curve: it comes from Steele's own reference "
-    "times, and the multipliers are verified against Steele (1967), "
-    "Appendix D."
+    "Every figure here is Steele (1967): the multipliers from Appendix D and "
+    "the reference times from page 108. The Thompson (1972) loss curve, which "
+    "would give dry matter lost against elapsed time, has not been obtained "
+    "and is not used."
 )

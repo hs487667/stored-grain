@@ -27,8 +27,8 @@
   </p>
   <dl class="premise">
     <div><dt>Measures</dt><dd>mechanical damage, percent by weight</dd></div>
-    <div><dt>Outputs</dt><dd>a ranking, not a spoilage date</dd></div>
-    <div><dt>Model</dt><dd>Thompson 1972 dry-matter loss</dd></div>
+    <div><dt>Outputs</dt><dd>a ranking first, days second</dd></div>
+    <div><dt>Model</dt><dd>Steele 1967 deterioration multipliers</dd></div>
   </dl>
 </header>
 
@@ -85,9 +85,10 @@
     <section id="ranking" class="panel panel-ranking" aria-labelledby="ranking-h">
       <h2 id="ranking-h" class="panel-title">Ranking</h2>
       <p class="gated">
-        Lots are ordered by degradation rate. Days to threshold are withheld:
-        Thompson&rsquo;s coefficients are unverified, so this system ranks and
-        does not predict.
+        Lots are ordered by degradation rate, which holds for any input. Days to
+        threshold are shown only when temperature, moisture and damage all sit
+        inside Steele&rsquo;s published ranges, and always with his stated
+        standard error beside them.
       </p>
       <div id="ranking-body"></div>
       <button id="reset" class="quiet" hidden>Clear session</button>
@@ -103,7 +104,7 @@
     storage model.
   </p>
   <p class="cites">
-    Thompson 1972 &middot; Steele 1967 &middot; Bern 2002
+    Steele 1967 &middot; Bern 2002
   </p>
 </footer>
 
