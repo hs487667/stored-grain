@@ -66,9 +66,13 @@ MT_C_SLOPE = 0.03
 MT_C_INTERCEPT = 0.5333333333333333   # 32/60, kept exact rather than rounded
 
 #: Correction terms for the warm, damp branches of the piecewise form.
+#: Steele writes the exponent as 0.61 * (T_F - 60) / 60. In Celsius that is
+#: 0.61 * (0.03 * T_C - 28/60), so the offset is 28/60 and not the 0.47 it
+#: rounds to -- kept exact for the same reason MT_C_INTERCEPT is.
 MT_WET_SLOPE = 0.01
 MT_WET_CAP = 0.09
 MT_WET_EXP_A = 0.61
+MT_WET_EXP_OFFSET = 0.4666666666666667   # 28/60
 
 
 # --- Moisture multiplier (Steele 1967, Appendix D) -------------------------

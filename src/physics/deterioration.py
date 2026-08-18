@@ -71,7 +71,9 @@ def temperature_multiplier(temperature_c: float, moisture_pct_wb: float) -> floa
     if temperature_c <= C.REFERENCE_TEMPERATURE_C or moisture_pct_wb <= 19.0:
         return base
 
-    warm = math.exp(C.MT_WET_EXP_A * (C.MT_C_SLOPE * temperature_c - 0.47))
+    warm = math.exp(
+        C.MT_WET_EXP_A * (C.MT_C_SLOPE * temperature_c - C.MT_WET_EXP_OFFSET)
+    )
     if moisture_pct_wb <= 28.0:
         return base + C.MT_WET_SLOPE * (moisture_pct_wb - 19.0) * warm
     return base + C.MT_WET_CAP * warm
