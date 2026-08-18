@@ -5,6 +5,7 @@ server does with a reading, not about inference, and loading 190 MB of weights
 per test would make them useless to run.
 """
 
+import csv
 import io
 
 import numpy as np
@@ -181,6 +182,8 @@ def test_the_page_is_served_at_the_root(client):
     response = client.get("/")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
+    assert 'href="/api/report.pdf"' in response.text
+    assert 'href="/api/report.csv"' in response.text
 
 
 def test_the_models_are_loaded_once_not_per_photograph():
@@ -251,6 +254,75 @@ def test_one_visitor_s_reset_leaves_another_s_lots_alone():
 
     assert alice.get("/api/lots").json()["lots"] == []
     assert len(bob.get("/api/lots").json()["lots"]) == 1
+
+
+# --- Downloadable reports -------------------------------------------------
+
+def test_csv_report_downloads_ranked_lot_evidence(client):
+    _upload(client, "lot_3.0", temperature=19.0, moisture=13.0)
+    _upload(client, "lot_30.0", temperature=27.0, moisture=17.0)
+
+    response = client.get("/api/report.csv")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "text/csv; charset=utf-8"
+    assert response.headers["content-disposition"] == \
+        'attachment; filename="maize-lot-report.csv"'
+    rows = list(csv.DictReader(io.StringIO(response.text)))
+    assert [row["lot_id"] for row in rows] == ["lot_30.0", "lot_3.0"]
+    assert rows[0]["rank"] == "1"
+    assert rows[0]["mechanical_damage_mass_pct"] == "30.00"
+    assert rows[0]["temperature_c"] == "27.00"
+    assert rows[0]["moisture_pct_wb"] == "17.00"
+    assert rows[0]["kernels_counted"] == "200"
+    assert float(rows[0]["days_to_threshold"]) > 0.0
+    assert rows[0]["model_warnings"]
+
+
+def test_csv_report_neutralises_spreadsheet_formulas_in_lot_names(client):
+    _upload(client, "=2+2_5.0")
+
+    response = client.get("/api/report.csv")
+    row = next(csv.DictReader(io.StringIO(response.text)))
+
+    assert row["lot_id"] == "'=2+2_5.0"
+
+
+def test_pdf_report_downloads_the_same_session_evidence(client):
+    _upload(client, "lot_5.0")
+
+    response = client.get("/api/report.pdf")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "application/pdf"
+    assert response.headers["content-disposition"] == \
+        'attachment; filename="maize-lot-report.pdf"'
+    assert response.content.startswith(b"%PDF-")
+    assert b"lot_5.0" in response.content
+    assert b"Mechanical damage" in response.content
+
+
+@pytest.mark.parametrize("path", ["/api/report.csv", "/api/report.pdf"])
+def test_an_empty_session_has_no_report_to_download(client, path):
+    response = client.get(path)
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "No lots to export."
+
+
+def test_a_visitor_s_report_never_contains_another_visitor_s_lots():
+    app = _app()
+    alice, bob = TestClient(app), TestClient(app)
+    _upload(alice, "lot_5.0")
+    _upload(bob, "lot_9.0")
+
+    alice_report = alice.get("/api/report.csv").text
+    bob_report = bob.get("/api/report.csv").text
+
+    assert "lot_5.0" in alice_report
+    assert "lot_9.0" not in alice_report
+    assert "lot_9.0" in bob_report
+    assert "lot_5.0" not in bob_report
 
 
 def test_a_visitor_cannot_delete_another_visitor_s_lot():

@@ -4,6 +4,7 @@ numpy==2.5.2
 pillow==12.3.0
 pytest==9.1.1
 python-multipart==0.0.32
+reportlab==5.0.0
 scikit-image==0.26.0
 scipy==1.18.0
 torch==2.13.0

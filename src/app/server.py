@@ -25,6 +25,7 @@ from fastapi.staticfiles import StaticFiles
 from src.app.images import NotAnImage, TooManyPixels, decode, to_working_scale
 from src.app.limits import RateLimiter, TooLarge, read_capped
 from src.app.overlay import draw
+from src.app.reports import csv_report, pdf_report
 from src.app.sessions import Session, SessionRegistry
 from src.pipeline import LotReading
 
@@ -197,6 +198,32 @@ def create_app(
                 for entry in session.store.ranking()
             ],
         }
+
+    def report_ranking(session: Session):
+        ranking = session.store.ranking()
+        if not ranking:
+            raise HTTPException(status_code=409, detail="No lots to export.")
+        return ranking
+
+    @app.get("/api/report.csv")
+    def download_csv(session: Session = Depends(visitor)):
+        return Response(
+            content=csv_report(report_ranking(session)),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": 'attachment; filename="maize-lot-report.csv"'
+            },
+        )
+
+    @app.get("/api/report.pdf")
+    def download_pdf(session: Session = Depends(visitor)):
+        return Response(
+            content=pdf_report(report_ranking(session)),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": 'attachment; filename="maize-lot-report.pdf"'
+            },
+        )
 
     @app.get("/api/lots/{lot_id}/overlay.png")
     def overlay(lot_id: str, session: Session = Depends(visitor)):

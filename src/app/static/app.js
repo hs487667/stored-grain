@@ -16,6 +16,7 @@
   var resultPanel = document.getElementById("result");
   var resultBody = document.getElementById("result-body");
   var rankingBody = document.getElementById("ranking-body");
+  var reportActions = document.getElementById("report-actions");
   var resetBtn = document.getElementById("reset");
 
   var busy = false;
@@ -377,6 +378,7 @@
   function applySession(data) {
     var lots = (data && data.lots) || [];
     renderRanking((data && data.ranking) || []);
+    reportActions.hidden = lots.length === 0;
     resetBtn.hidden = lots.length === 0;
 
     if (shownLot && !lots.some(function (lot) { return lot.lot_id === shownLot; })) {
