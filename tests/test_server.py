@@ -186,6 +186,15 @@ def test_the_page_is_served_at_the_root(client):
     assert 'href="/api/report.csv"' in response.text
 
 
+def test_the_page_exposes_the_measurement_flow_to_assistive_technology(client):
+    response = client.get("/")
+
+    assert 'aria-label="Measurement flow"' in response.text
+    assert "Capture sample" in response.text
+    assert "Measure kernels" in response.text
+    assert "Rank lots" in response.text
+
+
 def test_the_models_are_loaded_once_not_per_photograph():
     # Model load is 1.2 s. Per-request loading would make the app unusable and
     # would be invisible in a test that only checks the numbers.

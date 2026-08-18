@@ -3,39 +3,67 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="color-scheme" content="dark">
+<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#103a2b">
 <meta name="description" content="Measure mechanical damage in shelled maize from a photograph, and rank storage lots by how fast they are degrading.">
-<title>Maize damage capture</title>
+<title>Maize field assay</title>
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
 
 <a class="skip" href="#capture">Skip to capture</a>
 
-<p class="provenance" role="note">
-  <span class="provenance-mark" aria-hidden="true"></span>
-  <span>These models were trained on synthetic trays composed from one
-  laboratory imaging rig. <strong>No phone photograph has been validated
-  against ground truth.</strong> Every number here is provisional.</span>
-</p>
+<div class="topbar">
+  <p class="brand"><span class="brand-mark" aria-hidden="true"></span>Grain field assay</p>
+  <p class="build-state"><span aria-hidden="true"></span>Research prototype</p>
+</div>
+
+<div class="provenance" role="note">
+  <span class="provenance-mark" aria-hidden="true">!</span>
+  <p><strong>Validation boundary</strong> — trained on synthetic trays from one
+  laboratory rig. No phone photograph has been validated against ground truth;
+  every number is provisional.</p>
+</div>
 
 <header class="masthead">
-  <h1 class="wordmark">Maize damage capture</h1>
-  <p class="standfirst">
-    Photograph a tray of shelled maize. The system counts kernels with a
-    ruptured seed coat, and orders your lots by how fast each is degrading.
-  </p>
-  <dl class="premise">
-    <div><dt>Measures</dt><dd>mechanical damage, percent by weight</dd></div>
-    <div><dt>Outputs</dt><dd>a ranking first, days second</dd></div>
-    <div><dt>Model</dt><dd>Steele 1967 deterioration multipliers</dd></div>
-  </dl>
+  <div class="hero-copy">
+    <p class="eyebrow">Image-assisted maize assessment</p>
+    <h1 class="wordmark">Know which lot<br><span>needs attention first.</span></h1>
+    <p class="standfirst">
+      Photograph a tray. The assay counts visible mechanical damage and turns
+      it into a defensible storage-priority ranking.
+    </p>
+    <dl class="premise">
+      <div><dt>Measurement</dt><dd>damage by mass</dd></div>
+      <div><dt>Decision</dt><dd>relative lot priority</dd></div>
+      <div><dt>Reference</dt><dd>Steele, 1967</dd></div>
+    </dl>
+  </div>
+
+  <ol class="process-rail" aria-label="Measurement flow">
+    <li>
+      <span class="stage-mark" aria-hidden="true"><span></span></span>
+      <span class="stage-copy"><b>Capture sample</b><small>One tray photograph</small></span>
+    </li>
+    <li>
+      <span class="stage-mark" aria-hidden="true"><span></span></span>
+      <span class="stage-copy"><b>Measure kernels</b><small>Damage by weight</small></span>
+    </li>
+    <li>
+      <span class="stage-mark" aria-hidden="true"><span></span></span>
+      <span class="stage-copy"><b>Rank lots</b><small>Fastest degrading first</small></span>
+    </li>
+  </ol>
 </header>
 
-<main class="shell">
+<main id="main" class="shell">
 
   <section id="capture" class="panel panel-capture" aria-labelledby="capture-h">
-    <h2 id="capture-h" class="panel-title">Capture</h2>
+    <div class="section-heading">
+      <p class="section-index">Input station</p>
+      <h2 id="capture-h" class="panel-title">Capture a sample</h2>
+      <p class="section-copy">Use an evenly lit tray with separated kernels.</p>
+    </div>
     <form id="capture-form" novalidate>
       <div class="field">
         <label for="f-lot">Lot name</label>
@@ -65,12 +93,13 @@
         <input id="f-photo" name="photo" type="file" accept="image/*"
                capture="environment" required>
         <label class="dropzone" id="dropzone" for="f-photo" data-empty="true">
-          <span class="dropzone-primary">Photograph the tray</span>
-          <span class="dropzone-secondary">or choose an image</span>
+          <span class="dropzone-icon" aria-hidden="true"></span>
+          <span class="dropzone-primary">Photograph tray</span>
+          <span class="dropzone-secondary">or drop a JPEG / PNG here</span>
           <span class="dropzone-filename" id="photo-filename"></span>
         </label>
       </div>
-      <button type="submit" id="measure">Measure</button>
+      <button type="submit" id="measure"><span>Measure this lot</span><span aria-hidden="true">→</span></button>
     </form>
     <p id="status" class="status" role="status" aria-live="polite"></p>
   </section>
@@ -78,17 +107,21 @@
   <div class="results">
 
     <section id="result" class="panel panel-result" aria-labelledby="result-h" hidden>
-      <h2 id="result-h" class="panel-title">Reading</h2>
+      <div class="section-heading section-heading-row">
+        <div><p class="section-index">Latest assay</p><h2 id="result-h" class="panel-title">Reading</h2></div>
+        <span class="live-chip"><span aria-hidden="true"></span>Measured</span>
+      </div>
       <div id="result-body"></div>
     </section>
 
     <section id="ranking" class="panel panel-ranking" aria-labelledby="ranking-h">
-      <h2 id="ranking-h" class="panel-title">Ranking</h2>
+      <div class="section-heading section-heading-row">
+        <div><p class="section-index">Session queue</p><h2 id="ranking-h" class="panel-title">Lot priority</h2></div>
+        <span class="method-chip">Rate indexed</span>
+      </div>
       <p class="gated">
-        Lots are ordered by degradation rate, which holds for any input. Days to
-        threshold are shown only when temperature, moisture and damage all sit
-        inside Steele&rsquo;s published ranges, and always with his stated
-        standard error beside them.
+        Lots are ordered by degradation rate. Days appear only inside
+        Steele&rsquo;s published temperature, moisture and damage ranges.
       </p>
       <div id="ranking-body"></div>
       <div id="report-actions" class="report-actions" hidden>
@@ -102,7 +135,8 @@
 </main>
 
 <footer class="colophon">
-  <p>
+  <p class="footer-mark">G / 01</p>
+  <p class="footer-copy">
     Measures the input a published deterioration model needs, so the model can
     run without hand-counting kernels. Validates the measurement, not the
     storage model.
