@@ -1,3 +1,52 @@
 <!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Maize damage capture</title>
-<p>Capture screen goes here.</p>
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+
+<p class="provenance">
+  These models were trained on synthetic trays composed from one laboratory
+  imaging rig. <strong>No phone photograph has been validated against ground
+  truth.</strong> Every number below is provisional.
+</p>
+
+<nav>
+  <button id="tab-capture" class="active">Capture</button>
+  <button id="tab-ranking">Ranking</button>
+</nav>
+
+<section id="capture">
+  <form id="capture-form">
+    <label>Lot name
+      <input name="lot_id" required placeholder="brand A, bag 2">
+    </label>
+    <label>Temperature, &deg;C
+      <input name="temperature_c" type="number" step="0.1" value="25" required>
+    </label>
+    <label>Moisture, % wet basis
+      <input name="moisture_pct_wb" type="number" step="0.1" value="14" required>
+    </label>
+    <label class="camera">Photograph the tray
+      <input name="photo" type="file" accept="image/*" capture="environment" required>
+    </label>
+    <button type="submit">Measure</button>
+  </form>
+  <p id="status" role="status"></p>
+  <article id="result" hidden></article>
+</section>
+
+<section id="ranking" hidden>
+  <p class="mode">Lots are ordered by degradation rate. Absolute days to
+  threshold are withheld: Thompson&rsquo;s dry-matter-loss coefficients are
+  unverified, so this system ranks and does not predict.</p>
+  <div id="ranking-body"></div>
+  <button id="reset">Clear session</button>
+</section>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
