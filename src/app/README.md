@@ -21,6 +21,15 @@ measurement resolution, degradation result, and days-to-threshold when
 available. The CSV retains the model-warning fields for analysis; the
 presentation-focused PDF omits notes. Empty sessions return no report.
 
+## Interface
+
+The browser UI uses a field-instrument visual system shared with the PDF:
+chlorophyll green, maize yellow, condensed technical headings, and a visible
+capture-to-ranking process rail. Desktop keeps the capture station beside the
+reading and ranking workspace; phone layouts collapse into the same sequence.
+Motion is CSS-only and disabled through `prefers-reduced-motion`. No fonts,
+images, or scripts are fetched from third parties.
+
 ## Reaching it from outside the network
 
 A tunnel publishes the local server on an HTTPS URL without deploying
