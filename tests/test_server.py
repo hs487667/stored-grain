@@ -300,6 +300,8 @@ def test_pdf_report_downloads_the_same_session_evidence(client):
     assert response.content.startswith(b"%PDF-")
     assert b"lot_5.0" in response.content
     assert b"Mechanical damage" in response.content
+    assert b"Note:" not in response.content
+    assert b"Steele (1967) estimate" not in response.content
 
 
 @pytest.mark.parametrize("path", ["/api/report.csv", "/api/report.pdf"])
