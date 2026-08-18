@@ -42,6 +42,68 @@ from src.vision.localise import UNet, instances_from_logits
 #: A predicted kernel smaller than this fraction of the median is debris.
 MIN_RELATIVE_AREA = 0.15
 
+# --- Framing limits --------------------------------------------------------
+# Measured across the six validation trays, where a kernel occupies 0.277% to
+# 0.331% of the frame. The tolerance either side is the scale band from
+# docs/superpowers/plans/scale-experiment-result.md: counting holds between
+# 0.6x and 1.5x the trained size, which is 0.36x to 2.25x in area.
+#
+# This matters because the localiser is fully convolutional and has no scale
+# invariance. Handed a close-up it does not degrade, it merges the frame into a
+# single instance and reports a confident percentage of one thing -- which is
+# indistinguishable, on screen, from a real reading of clean grain.
+
+#: Median kernel area as a fraction of the frame, at the near limit.
+MAX_KERNEL_FRAME_FRACTION = 0.00745
+
+#: The same at the far limit.
+MIN_KERNEL_FRAME_FRACTION = 0.00100
+
+#: Below this a damage percentage is arithmetic on too small a sample to mean
+#: anything, whatever the framing looks like.
+MIN_KERNELS_FOR_A_PERCENTAGE = 10
+
+
+class FramingError(ValueError):
+    """The photograph is not framed like the trays the models were trained on.
+
+    A ValueError so that callers already treating an unreadable photograph as a
+    422 keep doing so, and get a message that says which way to move the phone.
+    """
+
+
+def check_framing(instances: np.ndarray, labels: list[int]) -> None:
+    """Refuse a photograph whose kernels are the wrong size on the sensor.
+
+    Raised before classification rather than after, so a misframed shot costs
+    one segmentation instead of a full pass, and so no number is ever computed
+    that could be shown.
+    """
+    if len(labels) < MIN_KERNELS_FOR_A_PERCENTAGE:
+        raise FramingError(
+            f"only {len(labels)} kernels found. A damage percentage needs at "
+            f"least {MIN_KERNELS_FOR_A_PERCENTAGE}; photograph a tray of grain "
+            f"rather than a few kernels"
+        )
+
+    frame = int(instances.shape[0]) * int(instances.shape[1])
+    median_area = float(np.median([int((instances == l).sum()) for l in labels]))
+    fraction = median_area / frame
+
+    if fraction > MAX_KERNEL_FRAME_FRACTION:
+        raise FramingError(
+            f"the kernels fill too much of the frame ({100 * fraction:.2f}% "
+            f"each, against {100 * MAX_KERNEL_FRAME_FRACTION:.2f}% allowed). "
+            f"Move the camera further away so the whole tray is in view"
+        )
+
+    if fraction < MIN_KERNEL_FRAME_FRACTION:
+        raise FramingError(
+            f"the kernels are too small in the frame ({100 * fraction:.3f}% "
+            f"each, against {100 * MIN_KERNEL_FRAME_FRACTION:.3f}% needed). "
+            f"Move the camera closer so the tray fills the frame"
+        )
+
 
 def assert_crop_framing(state: dict) -> None:
     """Refuse a classifier trained on framing the pipeline does not produce.
@@ -244,6 +306,8 @@ class Pipeline:
         areas = {l: int((instances == l).sum()) for l in labels}
         floor = np.median(list(areas.values())) * MIN_RELATIVE_AREA
         labels = [l for l in labels if areas[l] >= floor]
+
+        check_framing(instances, labels)
 
         crops, kept = [], []
         for label in labels:

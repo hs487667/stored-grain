@@ -270,3 +270,129 @@ def test_detections_reject_a_mismatched_pairing():
             labels=[1, 2],
             predictions=["sound"],
         )
+
+
+# --- Framing -------------------------------------------------------------
+# The localiser has no scale invariance. Handed a close-up it does not degrade,
+# it merges the frame into one blob and reports a confident percentage of
+# nothing. These pin the refusal, because a wrong number that looks calm is
+# worse than an error.
+
+def test_a_close_up_is_refused_and_says_which_way_to_move():
+    import numpy as np
+
+    from src.pipeline import FramingError, check_framing
+
+    # Enough instances to clear the count floor, each far too large: the phone
+    # is close enough that only a handful of kernels are in view.
+    instances = np.zeros((100, 100), dtype=int)
+    labels = []
+    for i in range(12):
+        y, x = (i // 4) * 30, (i % 4) * 25
+        instances[y : y + 15, x : x + 15] = i + 1
+        labels.append(i + 1)
+
+    with pytest.raises(FramingError, match="further away"):
+        check_framing(instances, labels)
+
+
+def test_a_single_blob_is_refused_for_having_no_kernels_to_count():
+    import numpy as np
+
+    from src.pipeline import FramingError, check_framing
+
+    # What a GrainSet single-kernel file actually produces: the localiser
+    # merges the frame into one instance rather than finding kernels.
+    instances = np.zeros((100, 100), dtype=int)
+    instances[5:95, 5:95] = 1
+
+    with pytest.raises(FramingError, match="only 1 kernels"):
+        check_framing(instances, [1])
+
+
+def test_kernels_far_too_small_are_refused():
+    import numpy as np
+
+    from src.pipeline import FramingError, check_framing
+
+    # Many 1-pixel specks: the tray is a long way off, or this is noise.
+    instances = np.zeros((400, 400), dtype=int)
+    labels = []
+    for i in range(60):
+        instances[i * 6, (i * 7) % 400] = i + 1
+        labels.append(i + 1)
+
+    with pytest.raises(FramingError, match="further|too small|farther"):
+        check_framing(instances, labels)
+
+
+def test_too_few_kernels_to_support_a_percentage_is_refused():
+    import numpy as np
+
+    from src.pipeline import FramingError, check_framing
+
+    instances = np.zeros((1391, 1391), dtype=int)
+    labels = []
+    for i in range(4):
+        instances[i * 100 : i * 100 + 88, 0:88] = i + 1
+        labels.append(i + 1)
+
+    with pytest.raises(FramingError, match="kernels"):
+        check_framing(instances, labels)
+
+
+def test_a_properly_framed_tray_passes():
+    import numpy as np
+
+    from src.pipeline import check_framing
+
+    # 150 kernels of the trained size in a 1391px frame.
+    instances = np.zeros((1391, 1391), dtype=int)
+    labels = []
+    side = 88
+    n = 0
+    for row in range(13):
+        for col in range(13):
+            if n >= 150:
+                break
+            y, x = row * 100, col * 100
+            n += 1
+            instances[y : y + side, x : x + side] = n
+            labels.append(n)
+    check_framing(instances, labels)
+
+
+def test_the_validation_trays_all_pass_framing():
+    # The guard must not reject the very images the measurement was validated
+    # on, which is the only way to know the band was not set too tight.
+    import glob
+
+    import numpy as np
+    from PIL import Image
+
+    from src.pipeline import MIN_RELATIVE_AREA, check_framing
+
+    trays = sorted(glob.glob("data/interim/validation/lot_*.png"))
+    if not trays:
+        pytest.skip("validation trays not on disk")
+
+    from src.pipeline import Pipeline
+    from src.vision.evaluate_localiser import predict_scene
+    from src.vision.localise import instances_from_logits
+
+    pipeline = Pipeline()
+    for tray in trays:
+        image = np.array(Image.open(tray).convert("RGB"))
+        instances = instances_from_logits(
+            predict_scene(pipeline.localiser, image, pipeline.device)
+        )
+        labels = [int(l) for l in np.unique(instances) if l != 0]
+        areas = {l: int((instances == l).sum()) for l in labels}
+        floor = np.median(list(areas.values())) * MIN_RELATIVE_AREA
+        kept = [l for l in labels if areas[l] >= floor]
+        check_framing(instances, kept)
+
+
+test_the_validation_trays_all_pass_framing = pytest.mark.slow(
+    test_the_validation_trays_all_pass_framing
+)
