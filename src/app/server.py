@@ -62,7 +62,9 @@ def serialise(reading: LotReading) -> dict:
         "degradation_rate": assessment.degradation_rate,
         "mode": assessment.mode,
         "days_to_threshold": assessment.days_to_threshold,
+        "days_to_threshold_error_pct": assessment.days_to_threshold_error_pct,
         "suppression_reasons": list(assessment.suppression_reasons),
+        "model_notes": list(assessment.model_notes),
         "ranges_ok": assessment.ranges.all_ok,
         "range_notes": list(assessment.ranges.notes),
     }

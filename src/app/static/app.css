@@ -560,6 +560,12 @@ input[type="number"]::-webkit-inner-spin-button { appearance: none; margin: 0; }
 
 .caveat-uncorrected { border-inline-start-color: color-mix(in oklab, var(--maize) 45%, transparent); }
 .caveat-gated       { border-inline-start-color: color-mix(in oklab, var(--muted) 55%, transparent); }
+.caveat-source      { border-inline-start-color: color-mix(in oklab, var(--muted) 35%, transparent); }
+
+.band {
+  font-size: 0.75em;
+  color: var(--muted);
+}
 
 .caveat-range {
   border-inline-start-color: var(--maize);

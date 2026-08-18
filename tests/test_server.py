@@ -93,11 +93,15 @@ def test_a_reading_carries_its_resolution_limit(client):
     assert body["resolvable_gap_pct"] > 0.0
 
 
-def test_a_reading_says_absolute_days_are_gated(client):
+def test_a_reading_carries_absolute_days_and_their_error(client):
     body = _upload(client, "lot_5.0").json()
-    assert body["mode"] == "ranking"
-    assert body["days_to_threshold"] is None
-    assert body["suppression_reasons"]
+    assert body["mode"] == "ranking+absolute"
+    assert body["days_to_threshold"] > 0.0
+    assert body["days_to_threshold_error_pct"] > 0.0
+    # Nothing was withheld, so nothing may claim to have been.
+    assert body["suppression_reasons"] == []
+    # The standing caveats still travel with the number.
+    assert body["model_notes"]
 
 
 def test_a_reading_says_whether_it_was_corrected(client):

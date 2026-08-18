@@ -284,6 +284,13 @@
       "</figcaption></figure>";
   }
 
+  function daysSummary(reading) {
+    if (typeof reading.days_to_threshold !== "number") return "&mdash;";
+    var days = fixed(reading.days_to_threshold, 1);
+    if (typeof reading.days_to_threshold_error_pct !== "number") return days;
+    return days + ' <span class="band">&plusmn;' + fixed(reading.days_to_threshold_error_pct, 1) + "%</span>";
+  }
+
   function readingMarkup(reading, overlaySrc) {
     var parts = [];
 
@@ -304,6 +311,7 @@
       '<div class="fact"><dt>By count</dt><dd class="num">' + fixed(reading.damage_count_pct, 2) + "%</dd></div>" +
       '<div class="fact"><dt>Temperature</dt><dd class="num">' + fixed(reading.temperature_c, 1) + " &deg;C</dd></div>" +
       '<div class="fact"><dt>Moisture</dt><dd class="num">' + fixed(reading.moisture_pct_wb, 1) + "% wb</dd></div>" +
+      '<div class="fact"><dt>Days to 0.5% loss</dt><dd class="num">' + daysSummary(reading) + "</dd></div>" +
       '<div class="fact"><dt>Mode</dt><dd>' + esc(reading.mode) + "</dd></div>" +
       '<div class="fact fact-wide">' +
       "<dt>Biological deterioration, withheld from the model</dt>" +
@@ -325,6 +333,11 @@
         '<p class="caveat caveat-gated">Days to threshold withheld: ' +
         reasons.map(esc).join("; ") + "</p>"
       );
+    }
+
+    var modelNotes = Array.isArray(reading.model_notes) ? reading.model_notes.filter(Boolean) : [];
+    if (modelNotes.length) {
+      parts.push('<p class="caveat caveat-source">' + modelNotes.map(esc).join(" ") + "</p>");
     }
 
     var notes = Array.isArray(reading.range_notes) ? reading.range_notes.filter(Boolean) : [];
