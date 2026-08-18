@@ -181,13 +181,38 @@ input,
   border-inline-start: 1px solid var(--maize);
 }
 
-.build-state span {
+.build-state > span[aria-hidden="true"] {
   inline-size: 7px;
   block-size: 7px;
   border-radius: 50%;
   background: var(--maize);
   box-shadow: 0 0 0 4px rgba(227, 174, 43, 0.15);
   animation: status-pulse 2.4s ease-in-out infinite;
+}
+
+html:lang(hi) .wordmark,
+html:lang(te) .wordmark {
+  font-family: var(--sans);
+  font-size: clamp(2.8rem, 5.8vw, 5rem);
+  font-stretch: normal;
+  letter-spacing: normal;
+  line-height: 1.18;
+  text-transform: none;
+}
+
+html:lang(hi) .eyebrow,
+html:lang(te) .eyebrow,
+html:lang(hi) .brand,
+html:lang(te) .brand,
+html:lang(hi) .build-state,
+html:lang(te) .build-state,
+html:lang(hi) .stage-copy b,
+html:lang(te) .stage-copy b,
+html:lang(hi) .stage-copy small,
+html:lang(te) .stage-copy small {
+  font-family: var(--sans);
+  letter-spacing: normal;
+  text-transform: none;
 }
 
 /* Validation boundary */
@@ -1077,12 +1102,22 @@ input[type="number"]::-webkit-inner-spin-button { appearance: none; margin: 0; }
 @media (max-width: 580px) {
   :root { --gutter: 1rem; --radius: 12px; }
   .topbar { flex-wrap: wrap; min-block-size: 48px; padding-block: var(--s2); }
-  .brand, .build-state { font-size: 0.58rem; }
-  .language-switcher { order: 3; inline-size: 100%; }
+  .brand, .build-state {
+    flex: 1 1 calc(50% - var(--s2));
+    max-inline-size: calc(50% - var(--s2));
+    min-inline-size: 0;
+    font-size: 0.58rem;
+    white-space: normal;
+  }
+  .build-state { justify-content: flex-end; text-align: end; }
+  .brand > span:last-child, .build-state > span:last-child { min-inline-size: 0; overflow-wrap: anywhere; }
+  .language-switcher { flex: 1 0 100%; order: 3; inline-size: 100%; }
   .language-switcher button { flex: 1 1 0; padding-inline: var(--s2); }
   .provenance { align-items: flex-start; font-size: 0.71rem; }
   .masthead { padding-block: var(--s7); }
   .wordmark { font-size: clamp(3rem, 15vw, 4.5rem); }
+  html:lang(hi) .wordmark,
+  html:lang(te) .wordmark { font-size: clamp(2.35rem, 11vw, 3.5rem); line-height: 1.2; }
   .standfirst { font-size: 0.95rem; }
   .premise { grid-template-columns: 1fr; gap: var(--s3); }
   .premise div { display: grid; grid-template-columns: 6.5rem 1fr; gap: var(--s3); }

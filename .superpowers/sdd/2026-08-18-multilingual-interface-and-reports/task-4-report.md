@@ -25,3 +25,9 @@ High-confidence Hindi and Telugu audit corrections were applied. The plan-locked
 ## Manual/Visual Verification
 
 Not run. Desktop/mobile populated-result switching, overflow, console, and downloaded report contents still require browser verification. Automated coverage and source review completed; no browser automation tooling was available within the task window.
+
+## Visual Follow-up
+
+Chrome screenshot review found crowded Indic display typography and clipped mobile topbar text. Hindi and Telugu now use a non-condensed sans face, normal tracking/case, and safer display-heading size and line height. Mobile brand and build-state labels can wrap within the first row while the language switcher retains a full-width second row. The build-state dot rule now targets only its decorative span.
+
+Follow-up verification: both JavaScript files passed `node --check`; browser i18n tests passed 3/3; focused Python i18n/server tests passed 56/56 with one existing deprecation warning.
