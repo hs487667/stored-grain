@@ -70,3 +70,23 @@ def test_known_model_message_is_localized_and_unknown_message_is_preserved():
     assert "60" in translated and "5-40" in translated
     assert "तापमान" in translated
     assert translate_message("te", "unrecognized model message") == "unrecognized model message"
+
+
+@pytest.mark.parametrize("locale", ("hi", "te"))
+def test_model_warning_prose_is_localized(locale):
+    moisture = translate(
+        locale,
+        "message.range.moisture",
+        value="20",
+        dry="25",
+        low="10",
+        high="18",
+    )
+    estimate = translate(
+        locale,
+        "message.model.days_estimate",
+        error="7.5",
+        threshold="0.5",
+    )
+    assert "wet basis" not in moisture
+    assert "dry-matter-loss" not in estimate
