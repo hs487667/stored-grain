@@ -10,6 +10,7 @@ import math
 import pytest
 
 from src.physics import constants as C
+from src.physics.deterioration import days_to_dml
 from src.physics.steele_agreement import (
     HAND_SHELLED_1965_HOURS,
     TABLE9,
@@ -17,6 +18,7 @@ from src.physics.steele_agreement import (
     damage_adjustment_checks,
     moisture_adjustment_checks,
     multiplier_checks,
+    reference_time_checks,
     ranks_the_two_field_lots_correctly,
     relative_deterioration_checks,
 )
@@ -80,3 +82,20 @@ def test_hand_shelled_is_slower_than_field_shelled_at_every_level():
     field = TABLE9[("1965", "observed")]
     for level in (0.1, 0.5, 1.0):
         assert HAND_SHELLED_1965_HOURS[level] > field[level]
+
+
+@pytest.mark.parametrize("check", reference_time_checks(), ids=lambda c: c.label)
+def test_absolute_times_match_steeles_observed_ones(check):
+    """The route behind days-to-threshold, against nine measured storage lives."""
+    assert check.physical
+    assert check.agrees, f"{check.label}: Steele {check.published}, model {check.model}"
+
+
+def test_the_reference_times_are_steeles_own():
+    """Page 108, quoted. A typo here silently rescales every absolute answer."""
+    assert C.STEELE_REFERENCE_HOURS == {0.1: 58.0, 0.5: 230.0, 1.0: 356.0}
+
+
+def test_days_to_dml_refuses_a_level_steele_did_not_publish():
+    with pytest.raises(ValueError):
+        days_to_dml(10.0, 20.0, 25.0, dml_level=0.25)

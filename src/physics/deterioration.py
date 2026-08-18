@@ -9,9 +9,15 @@ Two output paths, never one:
 * **Ranking** is always available. It needs only that the damage multiplier be
   monotone in damage, which holds for every candidate form of the equation, so
   it survives unverified coefficients and out-of-range inputs alike.
-* **Absolute** days-to-threshold appears only when the inputs sit inside the
-  published validity ranges *and* the coefficients have been checked against
-  the original paper.
+* **Absolute** days-to-threshold appears when the inputs sit inside the
+  published validity ranges. It comes from Steele's own reference times
+  (Equation 13, t = t_R * MT * MM * MD), which are in the dissertation on
+  disk, so it does not wait on Thompson. The figure carries Steele's stated
+  standard error with it and must never be quoted without it.
+
+The Thompson dry-matter-loss curve remains behind ``CONSTANTS_VERIFIED`` and
+answers a different question -- how much dry matter is lost after a given
+number of hours -- which nothing in the ranking or the storage decision asks.
 
 Composition note, because getting it backwards silently inverts the primary
 output: the multipliers are DIVISORS.
@@ -135,6 +141,45 @@ def equivalent_hours_for_dml(target_dml_pct: float) -> float:
     return (lo + hi) / 2.0
 
 
+def days_to_dml(
+    damage_pct: float,
+    temperature_c: float,
+    moisture_pct_wb: float,
+    dml_level: float = C.DML_THRESHOLD_PCT,
+) -> float:
+    """Days for a lot at these conditions to lose ``dml_level`` percent dry matter.
+
+    Steele's Equation 13 directly: ``t = t_R * MT * MM * MD``, with ``t_R``
+    the reference time on page 108. The multipliers are divisors of equivalent
+    time and therefore multipliers of real time -- the same relationship read
+    the other way round, which is why worsening conditions shorten the answer
+    here while lengthening equivalent hours elsewhere in this module.
+
+    No dry-matter-loss curve is involved. This asks how long the whole trip to
+    the threshold takes, not how loss accrues along the way, and Steele fitted
+    the former directly.
+
+    The answer is worth no more than Steele's standard error at that level --
+    about 11% at the 0.5% threshold. Callers should carry
+    ``C.STEELE_STANDARD_ERROR_PCT`` alongside it.
+    """
+    try:
+        reference_hours = C.STEELE_REFERENCE_HOURS[dml_level]
+    except KeyError:
+        raise ValueError(
+            f"no published reference time for DML level {dml_level}%; "
+            f"available: {sorted(C.STEELE_REFERENCE_HOURS)}"
+        ) from None
+
+    hours = (
+        reference_hours
+        * temperature_multiplier(temperature_c, moisture_pct_wb)
+        * moisture_multiplier(moisture_pct_wb)
+        * damage_multiplier(damage_pct, dml_level)
+    )
+    return hours / 24.0
+
+
 # --- Range checking --------------------------------------------------------
 
 @dataclass(frozen=True)
@@ -202,17 +247,36 @@ class Assessment:
     ranges: RangeCheck
     constants_verified: bool
 
-    #: Populated only when ``ranges.all_ok`` and ``constants_verified``.
+    #: Days to the 0.5% dry-matter-loss threshold, from Steele's reference
+    #: times. Populated whenever ``ranges.all_ok``; it does not wait on
+    #: Thompson. This is the absolute figure the application shows.
     days_to_threshold: float | None = None
 
-    #: Why the absolute figure was withheld, if it was.
+    #: Steele's standard error at the threshold level, in percent. Travels with
+    #: ``days_to_threshold`` and is None whenever that is.
+    days_to_threshold_error_pct: float | None = None
+
+    #: The same quantity by the Thompson dry-matter-loss curve, populated only
+    #: when ``ranges.all_ok`` and ``constants_verified``. Kept as a cross-check
+    #: on the day Thompson is obtained, not as an output.
+    days_to_threshold_thompson: float | None = None
+
+    #: Why an absolute figure was withheld, if it was. Empty when one is
+    #: shown -- the only thing that withholds it now is an out-of-range input.
     suppression_reasons: tuple[str, ...] = ()
+
+    #: Standing caveats about the model itself. Always populated, never a
+    #: reason anything was suppressed, and shown as a footnote rather than a
+    #: warning. Conflating the two produced a screen that said the days figure
+    #: was withheld while displaying it.
+    model_notes: tuple[str, ...] = ()
 
     citations: tuple[str, ...] = field(
         default=(
             "Steele, J. L. (1967), PhD dissertation, Iowa State University, "
             "Appendix D -- moisture, temperature and mechanical-damage multipliers",
-            "Thompson, T. L. (1972), Trans. ASAE 15(2):333-337 -- dry matter loss curve",
+            "Steele, J. L. (1967), p. 108, Eq. 13 -- reference times and "
+            "standard errors behind days to threshold",
             "Bern, C. J. et al. (2002), Appl. Eng. Agric. 18(6) -- 0.5% DML threshold",
         )
     )
@@ -234,8 +298,8 @@ def assess(
     ``damage_pct`` is percent by weight of kernels with a ruptured seed coat.
 
     ``constants_verified`` defaults to the module-level gate and exists as a
-    parameter only so tests can exercise the absolute path. Application code
-    should leave it alone.
+    parameter only so tests can exercise the Thompson cross-check. It no longer
+    affects ``days_to_threshold``. Application code should leave it alone.
     """
     verified = C.CONSTANTS_VERIFIED if constants_verified is None else constants_verified
 
@@ -256,13 +320,26 @@ def assess(
     ranges = check_ranges(temperature_c, moisture_pct_wb, damage_pct)
 
     reasons: list[str] = list(ranges.notes)
-    if not verified:
-        reasons.append(C.CONSTANTS_VERIFIED_NOTE)
+    notes: list[str] = []
 
     days: float | None = None
-    if ranges.all_ok and verified:
-        tr_star = equivalent_hours_for_dml(C.DML_THRESHOLD_PCT)
-        days = tr_star * product / 24.0
+    error_pct: float | None = None
+    thompson_days: float | None = None
+    if ranges.all_ok:
+        days = C.STEELE_REFERENCE_HOURS[C.DML_THRESHOLD_PCT] * product / 24.0
+        error_pct = C.STEELE_STANDARD_ERROR_PCT[C.DML_THRESHOLD_PCT]
+        if verified:
+            tr_star = equivalent_hours_for_dml(C.DML_THRESHOLD_PCT)
+            thompson_days = tr_star * product / 24.0
+
+    if not verified:
+        notes.append(C.CONSTANTS_VERIFIED_NOTE)
+    if days is not None:
+        notes.append(
+            f"Days to threshold is a Steele (1967) estimate and carries his "
+            f"stated standard error of {error_pct}% at the "
+            f"{C.DML_THRESHOLD_PCT}% dry-matter-loss level."
+        )
 
     return Assessment(
         damage_pct=damage_pct,
@@ -275,7 +352,10 @@ def assess(
         ranges=ranges,
         constants_verified=verified,
         days_to_threshold=days,
+        days_to_threshold_error_pct=error_pct,
+        days_to_threshold_thompson=thompson_days,
         suppression_reasons=tuple(reasons),
+        model_notes=tuple(notes),
     )
 
 

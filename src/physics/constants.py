@@ -28,6 +28,13 @@ Agriculture* 18(6).
 # rendering of Thompson (1972), not from Thompson's own paper, which has not
 # been obtained. They are the only constants in this module still in that
 # state. See CONSTANTS_VERIFIED below.
+#
+# Corroborated but not verified: inverting this curve to the 0.5% threshold
+# gives 230.9 equivalent hours, against the 230 hours Steele fitted
+# independently as his reference time (STEELE_REFERENCE_HOURS below). Two
+# authors, two datasets, two methods, 0.4% apart. That is strong evidence the
+# transcription is right and no evidence at all about provenance, so the gate
+# stays shut. Pinned by tests/test_deterioration.py.
 DML_A = 0.0883
 DML_B = 0.006
 DML_C = 0.00102
@@ -35,6 +42,41 @@ DML_C = 0.00102
 #: Spoilage threshold in percent dry matter loss. Bern et al. (2002) frame
 #: shelled-corn storage time explicitly around this figure.
 DML_THRESHOLD_PCT = 0.5
+
+
+# --- Steele's own reference times ------------------------------------------
+# The second, independent route to an absolute answer, and the one that does
+# not depend on Thompson at all.
+#
+# Steele's Equation 13 is t = t_R * MT * MM * MD, where t_R is the time at the
+# reference conditions above. On page 108 he states the values of t_R that
+# centre his residuals: "Adjusting the values of t_R to 58, 230 and 356 hours
+# for the 0.1, 0.5 and 1.0 percent dry matter loss levels respectively would
+# provide over all means of 1.0."
+#
+# This reaches days-to-threshold without the dry-matter-loss curve, because it
+# never asks how loss accumulates over time -- only how long the whole trip
+# takes. That is all a storage decision needs. The Thompson curve is required
+# only for loss as a function of elapsed time, which nothing here plots.
+#
+# VERIFIED against the primary source 18 August 2026; the dissertation is on
+# disk at ../../papers/. Checked numerically against Steele's own observed
+# times in src/physics/steele_agreement.py.
+STEELE_REFERENCE_HOURS = {
+    0.1: 58.0,
+    0.5: 230.0,
+    1.0: 356.0,
+}
+
+#: Steele, page 108: "The standard error associated with observations on
+#: samples treated alike is less than 12.5, 11.2 and 10.7 percent." This is the
+#: floor on how precise any absolute figure from this model can be, and it must
+#: travel with the number rather than being quoted separately.
+STEELE_STANDARD_ERROR_PCT = {
+    0.1: 12.5,
+    0.5: 11.2,
+    1.0: 10.7,
+}
 
 #: Complete oxidation of carbohydrate: a 1.0% dry matter loss corresponds to
 #: this much evolved CO2. Steele (1967), citing Saul & Lind (1958). Used only
@@ -128,10 +170,13 @@ MT_VALID_C = (1.7, 48.9)
 
 
 # --- The gate --------------------------------------------------------------
-#: Absolute days-to-threshold is suppressed while this is False. Ranking is
-#: unaffected and ships regardless, because a ranking needs only that the
-#: damage multiplier be monotone in damage -- which is true for every candidate
-#: form of the equation.
+#: The Thompson dry-matter-loss curve is suppressed while this is False.
+#:
+#: This no longer gates absolute days. Steele's own reference times above give
+#: days-to-threshold from a source that is on disk and checked, so the absolute
+#: answer now depends on the validity ranges alone. What stays gated is the
+#: loss curve itself -- dry matter lost as a function of elapsed hours -- which
+#: only Thompson supplies and which no output currently needs.
 #:
 #: Flip to True only when DML_A, DML_B and DML_C have been checked against
 #: Thompson (1972) itself. Nothing else in the codebase may set this.
@@ -140,8 +185,9 @@ CONSTANTS_VERIFIED = False
 #: Why it is still False, surfaced in the research view so a reviewer or
 #: examiner can see the reasoning rather than guess at it.
 CONSTANTS_VERIFIED_NOTE = (
-    "Thompson (1972) has not been obtained. The three dry-matter-loss "
-    "coefficients are transcribed from a review. The moisture, temperature "
-    "and mechanical-damage multipliers are verified against Steele (1967), "
+    "Thompson (1972) has not been obtained, so the dry-matter-loss curve is "
+    "unavailable and loss cannot be plotted against elapsed time. Days to "
+    "threshold does not use that curve: it comes from Steele's own reference "
+    "times, and the multipliers are verified against Steele (1967), "
     "Appendix D."
 )

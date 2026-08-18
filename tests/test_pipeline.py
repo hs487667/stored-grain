@@ -75,12 +75,25 @@ def test_resolvable_gap_shrinks_with_sample_size():
     ).resolvable_gap_pct
 
 
-def test_absolute_days_stay_gated_off():
-    # The DML coefficients are still unverified, so every reading must ship as
-    # ranking only. If this ever fails, someone flipped the gate.
+def test_a_reading_in_range_carries_absolute_days():
+    # 14% moisture and 10% damage sit inside the published ranges, which is
+    # where bagged maize actually lives, so a reading there must reach the
+    # absolute answer rather than stopping at a rank.
     ranked = rank_lots([_reading("a", 10.0)])
-    assert ranked[0].reading.assessment.days_to_threshold is None
-    assert ranked[0].reading.assessment.mode == "ranking"
+    assessment = ranked[0].reading.assessment
+    assert assessment.days_to_threshold is not None
+    assert assessment.days_to_threshold_error_pct is not None
+    assert assessment.mode == "ranking+absolute"
+
+
+def test_an_out_of_range_reading_still_ranks():
+    # Below the moisture floor the absolute answer is refused, but the lot
+    # still has to take its place in the ordering.
+    ranked = rank_lots([_reading("a", 10.0, moisture=11.0)])
+    assessment = ranked[0].reading.assessment
+    assert assessment.days_to_threshold is None
+    assert assessment.mode == "ranking"
+    assert assessment.degradation_rate > 0.0
 
 
 def test_ranks_are_sequential():

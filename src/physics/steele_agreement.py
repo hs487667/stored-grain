@@ -41,6 +41,7 @@ from . import constants as C
 from .deterioration import (
     assess,
     damage_multiplier,
+    days_to_dml,
     moisture_multiplier,
     rank,
     temperature_multiplier,
@@ -197,6 +198,47 @@ def relative_deterioration_checks() -> list[Check]:
     return checks
 
 
+def reference_time_checks() -> list[Check]:
+    """Absolute times, from Steele's reference hours, against his observed ones.
+
+    This is the check behind the second route to days-to-threshold. Equation 13
+    with t_R from page 108 predicts a storage life outright; Table 9 and the
+    hand shelled control give nine measured times to compare it against, across
+    two seasons, three loss levels and 0% to 41% mechanical damage.
+
+    Tolerance is 20%, not the 10.7-12.5% standard error Steele quotes. His
+    figure is for samples with their lot multiplier applied; this
+    implementation carries no lot multipliers, because a warehouse operator
+    cannot know one. The 1966 lot at the 0.1% level is the worst row at 18%
+    and it is a lot effect, not an arithmetic one.
+    """
+    temperature_c = _f_to_c(TABLE9_TEMPERATURE_F)
+    lots = [
+        ("1965 field shelled", TABLE9[("1965", "observed")]["moisture"],
+         TABLE9[("1965", "observed")]["damage"],
+         {level: TABLE9[("1965", "observed")][level] for level in DML_LEVELS}),
+        ("1966 field shelled", TABLE9[("1966", "observed")]["moisture"],
+         TABLE9[("1966", "observed")]["damage"],
+         {level: TABLE9[("1966", "observed")][level] for level in DML_LEVELS}),
+        ("1965 hand shelled", 27.8, 0.0, HAND_SHELLED_1965_HOURS),
+    ]
+    checks = []
+    for label, moisture, damage, observed in lots:
+        for level in DML_LEVELS:
+            model_hours = days_to_dml(damage, temperature_c, moisture, level) * 24.0
+            checks.append(
+                Check(
+                    "reference time",
+                    f"{label}, hours to {level}% DML",
+                    observed[level],
+                    model_hours,
+                    0.20,
+                    physical=True,
+                )
+            )
+    return checks
+
+
 def ranks_the_two_field_lots_correctly() -> bool:
     """Does the model order Steele's two field shelled lots as observed?
 
@@ -223,6 +265,7 @@ def all_checks() -> list[Check]:
         + damage_adjustment_checks()
         + moisture_adjustment_checks()
         + relative_deterioration_checks()
+        + reference_time_checks()
     )
 
 

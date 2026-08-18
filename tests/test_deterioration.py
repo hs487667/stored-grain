@@ -14,6 +14,7 @@ from src.physics.deterioration import (
     assess,
     check_ranges,
     damage_multiplier,
+    days_to_dml,
     dry_matter_loss_pct,
     equivalent_hours_for_dml,
     moisture_db_to_wb,
@@ -148,16 +149,39 @@ def test_published_moisture_range_matches_across_bases():
 
 # --- The gate --------------------------------------------------------------
 
-def test_absolute_is_suppressed_while_constants_unverified():
+def test_days_to_threshold_does_not_wait_on_thompson():
+    """The absolute figure comes from Steele, whose dissertation is on disk.
+
+    Thompson supplies the dry-matter-loss curve, which answers how much has
+    been lost after N hours. Days-to-threshold never asks that question, so
+    gating it on Thompson withheld an answer the sources already supported.
+    """
     a = assess(damage_pct=10.0, temperature_c=20.0, moisture_pct_wb=25.0,
                constants_verified=False)
-    assert a.days_to_threshold is None
-    assert a.mode == "ranking"
-    assert any("Thompson" in r for r in a.suppression_reasons)
+    assert a.days_to_threshold is not None
+    assert a.mode == "ranking+absolute"
+    assert a.days_to_threshold_thompson is None
+
+
+def test_the_absolute_figure_never_travels_without_its_error():
+    """An 11% standard error quoted separately is an error quoted never."""
+    a = assess(damage_pct=10.0, temperature_c=20.0, moisture_pct_wb=25.0)
+    assert a.days_to_threshold_error_pct == C.STEELE_STANDARD_ERROR_PCT[
+        C.DML_THRESHOLD_PCT
+    ]
+    assert any("standard error" in n for n in a.model_notes)
+
+
+def test_thompson_is_a_note_not_a_suppression_reason():
+    """Conflating the two produced a screen that withheld a figure it showed."""
+    a = assess(damage_pct=10.0, temperature_c=20.0, moisture_pct_wb=25.0,
+               constants_verified=False)
+    assert a.suppression_reasons == ()
+    assert any("Thompson" in n for n in a.model_notes)
 
 
 def test_ranking_survives_unverified_constants():
-    """The whole point of ranking-first: it does not need the gate open."""
+    """The whole point of ranking-first: it does not need any absolute path."""
     lots = [
         assess(damage_pct=d, temperature_c=20.0, moisture_pct_wb=25.0,
                constants_verified=False)
@@ -165,12 +189,49 @@ def test_ranking_survives_unverified_constants():
     ]
     ordered = rank(lots)
     assert [a.damage_pct for a in ordered] == [30.0, 12.0, 5.0]
-    assert all(a.days_to_threshold is None for a in ordered)
+    assert all(a.days_to_threshold_thompson is None for a in ordered)
 
 
 def test_module_gate_is_still_closed():
     """Guards against someone flipping the flag without obtaining the paper."""
     assert C.CONSTANTS_VERIFIED is False
+
+
+def test_the_two_absolute_routes_agree_when_both_are_open():
+    """If Thompson is ever obtained, the routes must not contradict.
+
+    They are independent. One inverts Thompson's loss curve to find the hours
+    at which 0.5% is reached; the other reads the reference time Steele fitted
+    to his own residuals. Different authors, different data, different method.
+
+    They land 0.4% apart -- 230.9 hours against 230. That is not a check this
+    project engineered, and it is the strongest evidence available that the
+    Thompson coefficients transcribed from a review are the right ones, since
+    a transcription error would have to be a coincidence of this size to
+    survive. It does not open the gate, because agreement is not provenance,
+    but it is worth pinning tightly: if an edit ever moves it, one of the two
+    sources has been misread.
+    """
+    a = assess(damage_pct=20.0, temperature_c=15.6, moisture_pct_wb=25.0,
+               constants_verified=True)
+    assert a.days_to_threshold_thompson is not None
+    ratio = a.days_to_threshold_thompson / a.days_to_threshold
+    assert ratio == pytest.approx(1.0, abs=0.01)
+
+
+def test_the_route_agreement_is_independent_of_conditions():
+    """Both routes are the same multiplier product times a constant.
+
+    So the ratio is that constant's ratio and nothing else. Pinning this stops
+    someone reading a single agreeing case as agreement across the range.
+    """
+    mild = assess(damage_pct=5.0, temperature_c=15.0, moisture_pct_wb=14.0,
+                  constants_verified=True)
+    harsh = assess(damage_pct=35.0, temperature_c=30.0, moisture_pct_wb=30.0,
+                   constants_verified=True)
+    assert (mild.days_to_threshold_thompson / mild.days_to_threshold) == pytest.approx(
+        harsh.days_to_threshold_thompson / harsh.days_to_threshold
+    )
 
 
 # --- Validity ranges -------------------------------------------------------
@@ -179,9 +240,9 @@ def test_module_gate_is_still_closed():
 
 def test_dried_maize_is_out_of_range_but_still_ranks():
     """The most common real query sits below the model's moisture floor."""
-    a = assess(damage_pct=8.0, temperature_c=25.0, moisture_pct_wb=12.0,
-               constants_verified=True)
+    a = assess(damage_pct=8.0, temperature_c=25.0, moisture_pct_wb=12.0)
     assert not a.ranges.moisture_ok
+    assert a.suppression_reasons
     assert a.days_to_threshold is None
     assert a.mode == "ranking"
     assert a.degradation_rate > 0.0
@@ -199,12 +260,24 @@ def test_range_notes_explain_each_refusal():
     assert len(checked.notes) == 3
 
 
-def test_in_range_and_verified_opens_absolute_path():
-    a = assess(damage_pct=20.0, temperature_c=20.0, moisture_pct_wb=25.0,
-               constants_verified=True)
+def test_in_range_opens_the_absolute_path():
+    a = assess(damage_pct=20.0, temperature_c=20.0, moisture_pct_wb=25.0)
     assert a.ranges.all_ok
     assert a.days_to_threshold is not None
     assert a.mode == "ranking+absolute"
+
+
+def test_worse_conditions_shorten_the_absolute_answer():
+    """The direction the whole composition can silently invert.
+
+    Days-to-threshold multiplies by the same multipliers that equivalent hours
+    divides by. Getting one right and the other backwards is possible, so both
+    directions are pinned.
+    """
+    clean = assess(damage_pct=5.0, temperature_c=15.0, moisture_pct_wb=14.0)
+    dirty = assess(damage_pct=35.0, temperature_c=30.0, moisture_pct_wb=30.0)
+    assert dirty.days_to_threshold < clean.days_to_threshold
+    assert dirty.degradation_rate > clean.degradation_rate
 
 
 # --- Input validation ------------------------------------------------------
