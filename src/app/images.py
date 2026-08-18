@@ -13,13 +13,25 @@ import io
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
+from src.app.limits import MAX_IMAGE_PIXELS
+
 #: Long edge every upload is resized to, matching the scale the localiser was
 #: trained at. Measured, not guessed.
 WORKING_LONG_EDGE_PX = 1391
 
+# Pillow's own ceiling is a warning by default, and it is the only thing
+# standing between this process and a file that decodes to more pixels than
+# there is memory. Raised deliberately rather than left at the default, which
+# is low enough to reject a legitimate 200 MP photograph.
+Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
+
 
 class NotAnImage(Exception):
     """The upload could not be decoded as an image."""
+
+
+class TooManyPixels(Exception):
+    """The upload decodes to more pixels than the endpoint will accept."""
 
 
 def decode(data: bytes) -> Image.Image:
@@ -34,7 +46,14 @@ def decode(data: bytes) -> Image.Image:
         raise NotAnImage("the upload was empty")
     try:
         image = Image.open(io.BytesIO(data))
+        if image.width * image.height > MAX_IMAGE_PIXELS:
+            raise TooManyPixels(
+                f"the photograph decodes to {image.width}x{image.height} pixels, "
+                f"beyond the {MAX_IMAGE_PIXELS // 1_000_000} megapixel limit"
+            )
         image.load()
+    except Image.DecompressionBombError as exc:
+        raise TooManyPixels(f"the photograph decodes too large: {exc}") from exc
     except (UnidentifiedImageError, OSError) as exc:
         raise NotAnImage(f"could not decode the upload as an image: {exc}") from exc
     return ImageOps.exif_transpose(image).convert("RGB")

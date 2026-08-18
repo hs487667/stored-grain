@@ -276,3 +276,65 @@ def test_the_same_visitor_keeps_their_lots_across_requests():
     _upload(client, "lot_5.0")
     _upload(client, "lot_9.0")
     assert len(client.get("/api/lots").json()["lots"]) == 2
+
+
+# --- Guards for a public URL -----------------------------------------------
+# Each of these costs the server an inference, so they are the endpoints that
+# have to be defended before the app is reachable from outside the network.
+
+def test_an_oversized_photograph_is_refused_before_inference():
+    from src.app.limits import MAX_UPLOAD_BYTES
+
+    pipeline = FakePipeline()
+    client = TestClient(create_app(pipeline_factory=lambda: pipeline))
+    oversized = b"\x89PNG\r\n\x1a\n" + b"\0" * (MAX_UPLOAD_BYTES + 1024)
+
+    response = client.post(
+        "/api/lots",
+        files={"photo": ("huge.png", oversized, "image/png")},
+        data={"lot_id": "lot_5.0", "temperature_c": "20", "moisture_pct_wb": "14"},
+    )
+    assert response.status_code == 413
+    # The point of the cap is that the models are never reached.
+    assert pipeline.calls == []
+
+
+def test_repeated_measurements_are_rate_limited():
+    from src.app.limits import RateLimiter
+
+    client = TestClient(
+        create_app(
+            pipeline_factory=FakePipeline,
+            limiter=RateLimiter(limit=2, window_s=60),
+        )
+    )
+    assert _upload(client, "lot_1.0").status_code == 201
+    assert _upload(client, "lot_2.0").status_code == 201
+
+    refused = _upload(client, "lot_3.0")
+    assert refused.status_code == 429
+    assert int(refused.headers["retry-after"]) > 0
+
+
+def test_a_rate_limited_caller_keeps_the_lots_they_already_measured():
+    from src.app.limits import RateLimiter
+
+    client = TestClient(
+        create_app(pipeline_factory=FakePipeline, limiter=RateLimiter(limit=1, window_s=60))
+    )
+    _upload(client, "lot_5.0")
+    _upload(client, "lot_9.0")
+
+    assert [r["lot_id"] for r in client.get("/api/lots").json()["lots"]] == ["lot_5.0"]
+
+
+def test_reading_the_ranking_is_not_rate_limited():
+    # Only inference is expensive. Throttling reads would punish the page for
+    # refreshing itself.
+    from src.app.limits import RateLimiter
+
+    client = TestClient(
+        create_app(pipeline_factory=FakePipeline, limiter=RateLimiter(limit=1, window_s=60))
+    )
+    for _ in range(10):
+        assert client.get("/api/lots").status_code == 200

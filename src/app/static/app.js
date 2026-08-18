@@ -87,6 +87,7 @@
     if (status === 404) return "That lot is no longer on the server.";
     if (status === 500) return "The server failed on that request. Try again with a different frame.";
     if (status === 413) return "That photograph is too large. Send a smaller image.";
+    if (status === 429) return "Too many measurements. Wait a moment and try again.";
     if (status >= 500) return "The server is not answering correctly. Try again shortly.";
     return "The server rejected that request (" + status + ").";
   }

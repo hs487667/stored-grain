@@ -13,6 +13,7 @@ can inject a fake and never touch the models at all.
 from __future__ import annotations
 
 import io
+import os
 import threading
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -21,7 +22,8 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Upload
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from src.app.images import NotAnImage, decode, to_working_scale
+from src.app.images import NotAnImage, TooManyPixels, decode, to_working_scale
+from src.app.limits import RateLimiter, TooLarge, read_capped
 from src.app.overlay import draw
 from src.app.sessions import Session, SessionRegistry
 from src.pipeline import LotReading
@@ -30,6 +32,11 @@ STATIC = Path(__file__).parent / "static"
 
 #: Name of the cookie carrying the session id.
 COOKIE = "session_id"
+
+#: Whether to believe `X-Forwarded-For` when identifying a caller. Off by
+#: default because any client can set that header; turn it on only when this
+#: process sits behind a proxy that overwrites it, such as a Cloudflare tunnel.
+TRUST_FORWARDED_FOR = os.environ.get("TRUST_FORWARDED_FOR") == "1"
 
 
 def serialise(reading: LotReading) -> dict:
@@ -68,10 +75,13 @@ def _default_pipeline():
 
 
 def create_app(
-    pipeline_factory=_default_pipeline, registry: SessionRegistry | None = None
+    pipeline_factory=_default_pipeline,
+    registry: SessionRegistry | None = None,
+    limiter: RateLimiter | None = None,
 ):
     app = FastAPI(title="Maize damage capture")
     registry = registry if registry is not None else SessionRegistry()
+    limiter = limiter if limiter is not None else RateLimiter()
 
     state = {"pipeline": None}
 
@@ -103,17 +113,47 @@ def create_app(
         )
         return session
 
+    def caller(request: Request) -> str:
+        """Who to count requests against.
+
+        The peer address, not the session id: a cookie is discarded for free,
+        so counting sessions would limit nobody. Behind a tunnel or proxy every
+        peer is the proxy, which collapses all callers into one bucket -- read
+        the forwarded address there instead, and only there, since a client can
+        set that header itself.
+        """
+        if TRUST_FORWARDED_FOR:
+            forwarded = request.headers.get("x-forwarded-for")
+            if forwarded:
+                return forwarded.split(",")[0].strip()
+        return request.client.host if request.client else "unknown"
+
     @app.post("/api/lots", status_code=201)
     async def add_lot(
         photo: UploadFile = File(...),
         lot_id: str = Form(...),
         temperature_c: float = Form(...),
         moisture_pct_wb: float = Form(...),
+        request: Request = None,
         session: Session = Depends(visitor),
     ):
-        raw = await photo.read()
+        wait = limiter.check(caller(request))
+        if wait is not None:
+            raise HTTPException(
+                status_code=429,
+                detail="Too many measurements. Wait a moment and try again.",
+                headers={"Retry-After": str(max(1, int(wait) + 1))},
+            )
+
+        try:
+            raw = await read_capped(photo)
+        except TooLarge as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
+
         try:
             image = to_working_scale(decode(raw))
+        except TooManyPixels as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
         except NotAnImage as exc:
             raise HTTPException(status_code=415, detail=str(exc)) from exc
 

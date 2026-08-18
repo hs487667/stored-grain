@@ -60,3 +60,25 @@ def test_a_small_image_is_left_alone():
     # Upscaling invents detail the localiser would read as kernel texture.
     small = Image.new("RGB", (200, 150))
     assert to_working_scale(small).size == (200, 150)
+
+
+# --- Guarding the decoder --------------------------------------------------
+# A compressed file says nothing about what it expands to, so the cap on the
+# upload does not cap the decode.
+
+def test_an_image_that_decodes_far_larger_than_it_arrives_is_refused():
+    from src.app.images import MAX_IMAGE_PIXELS, TooManyPixels, decode
+
+    # A single-colour PNG of enormous dimensions compresses to almost nothing.
+    side = int(MAX_IMAGE_PIXELS ** 0.5) + 2000
+    buffer = io.BytesIO()
+    Image.new("L", (side, side), 0).save(buffer, format="PNG")
+
+    with pytest.raises(TooManyPixels):
+        decode(buffer.getvalue())
+
+
+def test_an_ordinary_photograph_still_decodes():
+    from src.app.images import decode
+
+    assert decode(_png_bytes(4000, 3000)).size == (4000, 3000)
