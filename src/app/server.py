@@ -17,16 +17,19 @@ import threading
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from src.app.images import NotAnImage, decode, to_working_scale
 from src.app.overlay import draw
-from src.app.store import SessionStore
+from src.app.sessions import Session, SessionRegistry
 from src.pipeline import LotReading
 
 STATIC = Path(__file__).parent / "static"
+
+#: Name of the cookie carrying the session id.
+COOKIE = "session_id"
 
 
 def serialise(reading: LotReading) -> dict:
@@ -64,19 +67,41 @@ def _default_pipeline():
     return Pipeline()
 
 
-def create_app(pipeline_factory=_default_pipeline, store: SessionStore | None = None):
+def create_app(
+    pipeline_factory=_default_pipeline, registry: SessionRegistry | None = None
+):
     app = FastAPI(title="Maize damage capture")
-    store = store if store is not None else SessionStore()
+    registry = registry if registry is not None else SessionRegistry()
 
     state = {"pipeline": None}
+
+    # One set of weights and one Metal context, so inference is serialised
+    # across every visitor. Sessions isolate what people see, not what the
+    # hardware can do at once.
     lock = threading.Lock()
-    photographs: dict[str, bytes] = {}
-    overlays: dict[str, bytes] = {}
 
     def pipeline():
         if state["pipeline"] is None:
             state["pipeline"] = pipeline_factory()
         return state["pipeline"]
+
+    def visitor(request: Request, response: Response) -> Session:
+        """The caller's session, re-issuing the cookie on every request.
+
+        Re-issuing rather than setting it once keeps the cookie's lifetime in
+        step with the session's own idle timeout, so a browser does not hold an
+        id the server has already forgotten.
+        """
+        session_id, session = registry.get_or_create(request.cookies.get(COOKIE))
+        response.set_cookie(
+            COOKIE,
+            session_id,
+            httponly=True,
+            samesite="lax",
+            max_age=int(registry.idle_timeout_s),
+            path="/",
+        )
+        return session
 
     @app.post("/api/lots", status_code=201)
     async def add_lot(
@@ -84,6 +109,7 @@ def create_app(pipeline_factory=_default_pipeline, store: SessionStore | None = 
         lot_id: str = Form(...),
         temperature_c: float = Form(...),
         moisture_pct_wb: float = Form(...),
+        session: Session = Depends(visitor),
     ):
         raw = await photo.read()
         try:
@@ -107,16 +133,16 @@ def create_app(pipeline_factory=_default_pipeline, store: SessionStore | None = 
 
             buffer = io.BytesIO()
             draw(image, detections).save(buffer, format="PNG")
-            overlays[lot_id] = buffer.getvalue()
-            photographs[lot_id] = raw
-            store.add(reading)
+            session.overlays[lot_id] = buffer.getvalue()
+            session.photographs[lot_id] = raw
+            session.store.add(reading)
 
         return serialise(reading)
 
     @app.get("/api/lots")
-    def list_lots():
+    def list_lots(session: Session = Depends(visitor)):
         return {
-            "lots": [serialise(r) for r in store.readings()],
+            "lots": [serialise(r) for r in session.store.readings()],
             "ranking": [
                 {
                     "lot_id": entry.reading.lot_id,
@@ -126,29 +152,29 @@ def create_app(pipeline_factory=_default_pipeline, store: SessionStore | None = 
                     "damage_mass_pct": entry.reading.damage_mass_pct,
                     "resolvable_gap_pct": entry.reading.resolvable_gap_pct,
                 }
-                for entry in store.ranking()
+                for entry in session.store.ranking()
             ],
         }
 
     @app.get("/api/lots/{lot_id}/overlay.png")
-    def overlay(lot_id: str):
-        if lot_id not in overlays:
+    def overlay(lot_id: str, session: Session = Depends(visitor)):
+        if lot_id not in session.overlays:
             raise HTTPException(status_code=404, detail=f"no lot {lot_id!r}")
-        return Response(content=overlays[lot_id], media_type="image/png")
+        return Response(content=session.overlays[lot_id], media_type="image/png")
 
     @app.delete("/api/lots/{lot_id}", status_code=204)
-    def delete_lot(lot_id: str):
-        if not store.remove(lot_id):
+    def delete_lot(lot_id: str, session: Session = Depends(visitor)):
+        if not session.store.remove(lot_id):
             raise HTTPException(status_code=404, detail=f"no lot {lot_id!r}")
-        overlays.pop(lot_id, None)
-        photographs.pop(lot_id, None)
+        session.overlays.pop(lot_id, None)
+        session.photographs.pop(lot_id, None)
         return Response(status_code=204)
 
     @app.post("/api/session/reset", status_code=204)
-    def reset():
-        store.reset()
-        overlays.clear()
-        photographs.clear()
+    def reset(session: Session = Depends(visitor)):
+        session.store.reset()
+        session.overlays.clear()
+        session.photographs.clear()
         return Response(status_code=204)
 
     @app.get("/")

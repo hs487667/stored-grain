@@ -192,3 +192,87 @@ def test_the_models_are_loaded_once_not_per_photograph():
     _upload(client, "lot_5.0")
     _upload(client, "lot_9.0")
     assert len(created) == 1
+
+
+# --- Session isolation -----------------------------------------------------
+# The store was process-wide. Published, that puts every visitor into one
+# ranking. These pin the boundary at the HTTP layer, where the cookie is.
+
+def _app():
+    return create_app(pipeline_factory=FakePipeline)
+
+
+def test_two_visitors_do_not_see_each_other_s_lots():
+    app = _app()
+    alice, bob = TestClient(app), TestClient(app)
+
+    _upload(alice, "lot_5.0")
+    _upload(bob, "lot_9.0")
+
+    assert [r["lot_id"] for r in alice.get("/api/lots").json()["lots"]] == ["lot_5.0"]
+    assert [r["lot_id"] for r in bob.get("/api/lots").json()["lots"]] == ["lot_9.0"]
+
+
+def test_a_visitor_is_issued_a_session_cookie():
+    response = TestClient(_app()).get("/api/lots")
+    assert "session_id" in response.cookies
+
+
+def test_the_session_cookie_is_not_readable_by_script():
+    # The id is a bearer token for a session; script access would let any
+    # injected content on the page hand it to somebody else.
+    response = TestClient(_app()).get("/api/lots")
+    header = response.headers["set-cookie"].lower()
+    assert "httponly" in header
+    assert "samesite=lax" in header
+
+
+def test_a_forged_cookie_lands_in_a_fresh_session_not_someone_else_s():
+    app = _app()
+    alice = TestClient(app)
+    _upload(alice, "lot_5.0")
+
+    intruder = TestClient(app)
+    intruder.cookies.set("session_id", "guessed")
+    assert intruder.get("/api/lots").json()["lots"] == []
+
+
+def test_one_visitor_s_reset_leaves_another_s_lots_alone():
+    app = _app()
+    alice, bob = TestClient(app), TestClient(app)
+    _upload(alice, "lot_5.0")
+    _upload(bob, "lot_9.0")
+
+    alice.post("/api/session/reset")
+
+    assert alice.get("/api/lots").json()["lots"] == []
+    assert len(bob.get("/api/lots").json()["lots"]) == 1
+
+
+def test_a_visitor_cannot_delete_another_visitor_s_lot():
+    app = _app()
+    alice, bob = TestClient(app), TestClient(app)
+    _upload(alice, "lot_5.0")
+    bob.get("/api/lots")
+
+    assert bob.delete("/api/lots/lot_5.0").status_code == 404
+    assert len(alice.get("/api/lots").json()["lots"]) == 1
+
+
+def test_a_visitor_cannot_read_another_visitor_s_overlay():
+    # Overlays were a process-wide dict keyed by lot id alone, so two visitors
+    # using the same lot name would have served each other their photographs.
+    app = _app()
+    alice, bob = TestClient(app), TestClient(app)
+    _upload(alice, "lot_5.0")
+    bob.get("/api/lots")
+
+    assert bob.get("/api/lots/lot_5.0/overlay.png").status_code == 404
+    assert alice.get("/api/lots/lot_5.0/overlay.png").status_code == 200
+
+
+def test_the_same_visitor_keeps_their_lots_across_requests():
+    client = TestClient(_app())
+    _upload(client, "lot_5.0")
+    _upload(client, "lot_9.0")
+    assert len(client.get("/api/lots").json()["lots"]) == 2
