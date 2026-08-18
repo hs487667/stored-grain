@@ -21,7 +21,21 @@ measurement resolution, degradation result, and days-to-threshold when
 available. The CSV retains the model-warning fields for analysis; the
 presentation-focused PDF omits notes. Empty sessions return no report.
 
+Report language follows the browser's selected language (`en`, `hi`, or `te`)
+through the `?lang=` query parameter. Downloads are session-scoped; empty
+sessions return no report.
+
 ## Interface
+
+The header offers English, Hindi, and Telugu. English is restored on refresh;
+the selected language is held in memory and is not persisted. All visible and
+accessibility text, validation/status messages, and generated report text are
+curated and offline. PDF and CSV use the selected language; CSV is UTF-8 BOM
+encoded. Lot names, numbers, units, model names, and citations are preserved.
+Indic PDF fonts are bundled (`src/app/fonts/`); ReportLab shaping requires the
+pinned `uharfbuzz==0.55.0` dependency. The PDF shaping path is experimental
+and still needs manual visual verification for downloaded Hindi and Telugu
+reports.
 
 The browser UI uses a field-instrument visual system shared with the PDF:
 chlorophyll green, maize yellow, condensed technical headings, and a visible
