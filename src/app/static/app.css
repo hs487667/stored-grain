@@ -252,7 +252,9 @@ input,
   min-inline-size: 0;
 }
 
-.field label {
+/* The dropzone is also a label -- it is the control surface for the file
+   input -- so the caption rule must not reach it. */
+.field label:not(.dropzone) {
   font-size: 0.8125rem;
   color: var(--muted);
 }

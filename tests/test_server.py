@@ -338,3 +338,17 @@ def test_reading_the_ranking_is_not_rate_limited():
     )
     for _ in range(10):
         assert client.get("/api/lots").status_code == 200
+
+
+# --- The page's own wiring -------------------------------------------------
+
+def test_the_visible_upload_surface_actually_opens_the_file_picker(client):
+    # The dropzone is the only large target on the capture screen and the file
+    # input behind it is visually hidden. If the dropzone is not a label bound
+    # to that input, clicking it does nothing at all -- and nothing else in the
+    # test suite exercises a browser, so this is the only place that catches it.
+    page = client.get("/").text
+    assert 'class="dropzone"' in page
+    dropzone = page[page.index('class="dropzone"') - 40 : page.index('class="dropzone"') + 120]
+    assert dropzone.lstrip().startswith("<label") or "<label" in dropzone
+    assert 'for="f-photo"' in dropzone

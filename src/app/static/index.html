@@ -64,11 +64,11 @@
         <label for="f-photo" id="photo-label">Tray photograph</label>
         <input id="f-photo" name="photo" type="file" accept="image/*"
                capture="environment" required>
-        <div class="dropzone" id="dropzone" data-empty="true">
+        <label class="dropzone" id="dropzone" for="f-photo" data-empty="true">
           <span class="dropzone-primary">Photograph the tray</span>
           <span class="dropzone-secondary">or choose an image</span>
           <span class="dropzone-filename" id="photo-filename"></span>
-        </div>
+        </label>
       </div>
       <button type="submit" id="measure">Measure</button>
     </form>
