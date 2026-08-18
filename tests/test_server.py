@@ -105,6 +105,15 @@ def test_a_reading_carries_absolute_days_and_their_error(client):
     assert body["model_notes"]
 
 
+def test_reading_exposes_localizable_model_message_descriptors(client):
+    body = _upload(client, "lot_5.0").json()
+    assert body["model_messages"]
+    assert all(
+        {"key", "values", "fallback"} <= set(item)
+        for item in body["model_messages"]
+    )
+
+
 def test_a_reading_says_whether_it_was_corrected(client):
     body = _upload(client, "lot_5.0").json()
     assert body["calibrated"] is False
@@ -277,7 +286,7 @@ def test_csv_report_downloads_ranked_lot_evidence(client):
     assert response.headers["content-type"] == "text/csv; charset=utf-8"
     assert response.headers["content-disposition"] == \
         'attachment; filename="maize-lot-report.csv"'
-    rows = list(csv.DictReader(io.StringIO(response.text)))
+    rows = list(csv.DictReader(io.StringIO(response.content.decode("utf-8-sig"))))
     assert [row["lot_id"] for row in rows] == ["lot_30.0", "lot_3.0"]
     assert rows[0]["rank"] == "1"
     assert rows[0]["mechanical_damage_mass_pct"] == "30.00"
@@ -292,9 +301,39 @@ def test_csv_report_neutralises_spreadsheet_formulas_in_lot_names(client):
     _upload(client, "=2+2_5.0")
 
     response = client.get("/api/report.csv")
-    row = next(csv.DictReader(io.StringIO(response.text)))
+    row = next(csv.DictReader(io.StringIO(response.content.decode("utf-8-sig"))))
 
     assert row["lot_id"] == "'=2+2_5.0"
+
+
+@pytest.mark.parametrize(
+    ("lang", "rank_header", "yes_value", "suffix"),
+    [
+        ("hi", "रैंक", "नहीं", "-hi.csv"),
+        ("te", "ర్యాంక్", "కాదు", "-te.csv"),
+    ],
+)
+def test_csv_report_uses_requested_language(client, lang, rank_header, yes_value, suffix):
+    _upload(client, "lot_5.0")
+
+    response = client.get(f"/api/report.csv?lang={lang}")
+    text = response.content.decode("utf-8-sig")
+    rows = list(csv.DictReader(io.StringIO(text)))
+
+    assert response.content.startswith(b"\xef\xbb\xbf")
+    assert rank_header in rows[0]
+    assert rows[0][rank_header] == "1"
+    assert yes_value in rows[0].values()
+    assert rows[0]["लॉट_नाम" if lang == "hi" else "లాట్_పేరు"] == "lot_5.0"
+    assert suffix in response.headers["content-disposition"]
+
+
+def test_invalid_csv_language_falls_back_to_existing_english_contract(client):
+    _upload(client, "lot_5.0")
+    response = client.get("/api/report.csv?lang=fr")
+    rows = list(csv.DictReader(io.StringIO(response.content.decode("utf-8-sig"))))
+    assert rows[0]["rank"] == "1"
+    assert 'filename="maize-lot-report.csv"' in response.headers["content-disposition"]
 
 
 def test_pdf_report_downloads_the_same_session_evidence(client):

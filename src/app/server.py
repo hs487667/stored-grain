@@ -23,6 +23,7 @@ from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from src.app.images import NotAnImage, TooManyPixels, decode, to_working_scale
+from src.app.i18n import describe_message, normalize_locale
 from src.app.limits import RateLimiter, TooLarge, read_capped
 from src.app.overlay import draw
 from src.app.reports import csv_report, pdf_report
@@ -65,9 +66,14 @@ def serialise(reading: LotReading) -> dict:
         "days_to_threshold": assessment.days_to_threshold,
         "days_to_threshold_error_pct": assessment.days_to_threshold_error_pct,
         "suppression_reasons": list(assessment.suppression_reasons),
+        "suppression_messages": [
+            describe_message(text) for text in assessment.suppression_reasons
+        ],
         "model_notes": list(assessment.model_notes),
+        "model_messages": [describe_message(text) for text in assessment.model_notes],
         "ranges_ok": assessment.ranges.all_ok,
         "range_notes": list(assessment.ranges.notes),
+        "range_messages": [describe_message(text) for text in assessment.ranges.notes],
     }
 
 
@@ -206,12 +212,16 @@ def create_app(
         return ranking
 
     @app.get("/api/report.csv")
-    def download_csv(session: Session = Depends(visitor)):
+    def download_csv(lang: str = "en", session: Session = Depends(visitor)):
+        locale = normalize_locale(lang)
+        suffix = "" if locale == "en" else f"-{locale}"
         return Response(
-            content=csv_report(report_ranking(session)),
+            content=csv_report(report_ranking(session), locale),
             media_type="text/csv",
             headers={
-                "Content-Disposition": 'attachment; filename="maize-lot-report.csv"'
+                "Content-Disposition": (
+                    f'attachment; filename="maize-lot-report{suffix}.csv"'
+                )
             },
         )
 

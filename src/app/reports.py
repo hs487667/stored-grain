@@ -9,6 +9,7 @@ from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
 from reportlab.pdfgen import canvas
 
+from src.app.i18n import normalize_locale, translate, translate_message
 from src.pipeline import RankedLot
 
 
@@ -36,25 +37,26 @@ def _number(value: float | None) -> str:
     return "" if value is None else f"{value:.2f}"
 
 
-def _warnings(entry: RankedLot) -> str:
+def _warnings(entry: RankedLot, locale: str) -> str:
     assessment = entry.reading.assessment
     messages = dict.fromkeys(
         (*assessment.suppression_reasons, *assessment.model_notes)
     )
-    return "; ".join(messages)
+    return "; ".join(translate_message(locale, message) for message in messages)
 
 
 def _csv_cell(value: str) -> str:
     return f"'{value}" if value[:1] in ("=", "+", "-", "@", "\t", "\r") else value
 
 
-def _rows(ranking: list[RankedLot]) -> list[dict[str, str | int]]:
+def _rows(ranking: list[RankedLot], locale: str = "en") -> list[dict[str, str | int]]:
     rows = []
     for entry in ranking:
         reading = entry.reading
         assessment = reading.assessment
         biological = "; ".join(
-            f"{name}: {value:.2f}" for name, value in sorted(reading.biological_pct.items())
+            f"{translate(locale, f'class.{name}')}: {value:.2f}"
+            for name, value in sorted(reading.biological_pct.items())
         )
         rows.append(
             {
@@ -69,27 +71,32 @@ def _rows(ranking: list[RankedLot]) -> list[dict[str, str | int]]:
                 "biological_damage_pct": biological,
                 "resolvable_gap_pct": _number(reading.resolvable_gap_pct),
                 "degradation_rate": f"{assessment.degradation_rate:.6f}",
-                "mode": assessment.mode,
+                "mode": translate(
+                    locale, f"mode.{assessment.mode.replace('+absolute', '_absolute')}"
+                ),
                 "days_to_threshold": _number(assessment.days_to_threshold),
                 "days_to_threshold_error_pct": _number(
                     assessment.days_to_threshold_error_pct
                 ),
-                "calibrated": "yes" if reading.calibration is not None else "no",
-                "model_warnings": _warnings(entry),
+                "calibrated": translate(
+                    locale, "value.yes" if reading.calibration is not None else "value.no"
+                ),
+                "model_warnings": _warnings(entry, locale),
             }
         )
     return rows
 
 
-def csv_report(ranking: list[RankedLot]) -> bytes:
+def csv_report(ranking: list[RankedLot], locale: str = "en") -> bytes:
+    code = normalize_locale(locale)
     output = io.StringIO(newline="")
-    writer = csv.DictWriter(output, fieldnames=CSV_FIELDS)
-    writer.writeheader()
-    for row in _rows(ranking):
+    writer = csv.writer(output)
+    writer.writerow([translate(code, f"csv.{field}") for field in CSV_FIELDS])
+    for row in _rows(ranking, code):
         row["lot_id"] = _csv_cell(str(row["lot_id"]))
         row["tied_with"] = _csv_cell(str(row["tied_with"]))
-        writer.writerow(row)
-    return output.getvalue().encode("utf-8")
+        writer.writerow([row[field] for field in CSV_FIELDS])
+    return output.getvalue().encode("utf-8-sig")
 
 
 def _safe(text: object) -> str:
