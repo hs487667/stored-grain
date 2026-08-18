@@ -239,3 +239,34 @@ def test_an_explicit_raw_figure_is_kept():
     )
     assert reading.raw_damage_mass_pct == pytest.approx(7.5)
     assert reading.raw_damage_count_pct == pytest.approx(7.4)
+
+
+# --- Per-instance detail ---------------------------------------------------
+# The overlay needs what the reading throws away. These pin the relationship
+# between the two so the app can never draw a different measurement from the
+# one the pipeline reported.
+
+def test_detections_line_up_one_to_one_with_predictions():
+    import numpy as np
+
+    from src.pipeline import Detections
+
+    detections = Detections(
+        instances=np.array([[0, 1], [2, 2]]),
+        labels=[1, 2],
+        predictions=["sound", "fragment"],
+    )
+    assert len(detections.labels) == len(detections.predictions)
+
+
+def test_detections_reject_a_mismatched_pairing():
+    import numpy as np
+
+    from src.pipeline import Detections
+
+    with pytest.raises(ValueError, match="one prediction per instance"):
+        Detections(
+            instances=np.zeros((2, 2), dtype=int),
+            labels=[1, 2],
+            predictions=["sound"],
+        )

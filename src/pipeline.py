@@ -74,6 +74,32 @@ class CorrectedDamage:
     count_pct: float
 
 
+@dataclass(frozen=True)
+class Detections:
+    """Where the kernels were and what each one was called.
+
+    The aggregate reading cannot be drawn on a photograph, and a second pass to
+    recover the instances would be a second measurement that could disagree
+    with the first. So the pipeline hands both out of one pass.
+    """
+
+    #: Instance labels per pixel; 0 is background.
+    instances: np.ndarray
+
+    #: Instance labels that survived the debris filter, in prediction order.
+    labels: list[int]
+
+    #: Project class name for each kept instance.
+    predictions: list[str]
+
+    def __post_init__(self) -> None:
+        if len(self.labels) != len(self.predictions):
+            raise ValueError(
+                "one prediction per instance: "
+                f"{len(self.labels)} labels, {len(self.predictions)} predictions"
+            )
+
+
 def correct_measurement(
     measurement: DamageMeasurement, calibration: DamageCalibration | None
 ) -> CorrectedDamage:
@@ -195,14 +221,15 @@ class Pipeline:
         self.transform = eval_transform()
 
     @torch.no_grad()
-    def read(
+    def analyse(
         self,
         image_path: str | Path,
         *,
         lot_id: str,
         temperature_c: float,
         moisture_pct_wb: float,
-    ) -> LotReading:
+    ) -> tuple[LotReading, Detections]:
+        """The reading and the instances it was computed from, in one pass."""
         image = np.array(Image.open(image_path).convert("RGB"))
 
         instances = instances_from_logits(
@@ -239,7 +266,7 @@ class Pipeline:
         corrected = correct_measurement(measurement, self.calibration)
         assessment = assess(corrected.mass_pct, temperature_c, moisture_pct_wb)
 
-        return LotReading(
+        reading = LotReading(
             lot_id=lot_id,
             kernels_counted=measurement.kernels_counted,
             damage_mass_pct=corrected.mass_pct,
@@ -253,6 +280,28 @@ class Pipeline:
             raw_damage_count_pct=measurement.mechanical_damage_count_pct,
             calibration=self.calibration,
         )
+
+        names = [self.classes[index] for index in predictions]
+        return reading, Detections(
+            instances=instances, labels=kept, predictions=names
+        )
+
+    def read(
+        self,
+        image_path: str | Path,
+        *,
+        lot_id: str,
+        temperature_c: float,
+        moisture_pct_wb: float,
+    ) -> LotReading:
+        """The reading alone, for callers that do not draw the photograph."""
+        reading, _ = self.analyse(
+            image_path,
+            lot_id=lot_id,
+            temperature_c=temperature_c,
+            moisture_pct_wb=moisture_pct_wb,
+        )
+        return reading
 
 
 @dataclass
