@@ -309,7 +309,7 @@ def test_csv_report_neutralises_spreadsheet_formulas_in_lot_names(client):
 @pytest.mark.parametrize(
     ("lang", "rank_header", "yes_value", "suffix"),
     [
-        ("hi", "रैंक", "नहीं", "-hi.csv"),
+        ("hi", "क्रम", "नहीं", "-hi.csv"),
         ("te", "ర్యాంక్", "కాదు", "-te.csv"),
     ],
 )
