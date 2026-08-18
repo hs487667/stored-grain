@@ -377,6 +377,23 @@ def test_pdf_report_uses_requested_language_and_embedded_unicode_font(
     assert suffix in response.headers["content-disposition"]
 
 
+@pytest.mark.parametrize("lang", ["hi", "te", "en"])
+def test_pdf_report_preserves_native_script_lot_ids_and_ties(client, lang):
+    lot_ids = ("लॉट_5.0", "లాట్_6.0")
+    for lot_id in lot_ids:
+        _upload(client, lot_id)
+
+    response = client.get(f"/api/report.pdf?lang={lang}")
+    text = "\n".join(
+        page.extract_text() or ""
+        for page in PdfReader(io.BytesIO(response.content)).pages
+    )
+
+    assert response.status_code == 200
+    for lot_id in lot_ids:
+        assert text.count(lot_id) >= 2
+
+
 def test_invalid_pdf_language_falls_back_to_english(client):
     _upload(client, "lot_5.0")
     response = client.get("/api/report.pdf?lang=fr")
