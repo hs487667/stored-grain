@@ -34,13 +34,17 @@ curated and offline. PDF and CSV use the selected language; CSV is UTF-8 BOM
 encoded. Lot names, numbers, units, model names, and citations are preserved.
 Indic PDF fonts are bundled (`src/app/fonts/`); ReportLab shaping requires the
 pinned `uharfbuzz==0.55.0` dependency. The PDF shaping path is experimental
-and still needs manual visual verification for downloaded Hindi and Telugu
-reports.
+across deployment devices; Hindi and Telugu Poppler renders were visually
+checked in this environment.
 
 The browser UI uses a field-instrument visual system shared with the PDF:
 chlorophyll green, maize yellow, condensed technical headings, and a visible
 capture-to-ranking process rail. Desktop keeps the capture station beside the
 reading and ranking workspace; phone layouts collapse into the same sequence.
+The compact language rail sits at the far-right of the product header and keeps
+all three choices visible on a 390 px viewport. Static CSS and JavaScript URLs
+are versioned in `index.html` so layout changes cannot pair with stale cached
+assets. The former yellow validation-warning banner is not rendered.
 Motion is CSS-only and disabled through `prefers-reduced-motion`. No fonts,
 images, or scripts are fetched from third parties.
 
@@ -75,5 +79,6 @@ exist to photograph.
 ## The numbers it shows
 
 Every reading is uncorrected and comes from models trained on synthetic trays
-from one laboratory rig. The interface says so, permanently, because the app
-will be pointed at maize that the models have never seen.
+from one laboratory rig. This limitation remains documented in the locale
+catalogs, project handoff, master plan, and analysis-oriented report content;
+the compact browser interface no longer renders a separate warning banner.
