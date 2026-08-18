@@ -12,6 +12,7 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
+from pypdf import PdfReader
 
 from src.app.server import create_app
 from src.physics.deterioration import assess
@@ -350,6 +351,43 @@ def test_pdf_report_downloads_the_same_session_evidence(client):
     assert b"Mechanical damage" in response.content
     assert b"Note:" not in response.content
     assert b"Steele (1967) estimate" not in response.content
+
+
+@pytest.mark.parametrize(
+    ("lang", "title", "suffix"),
+    [
+        ("hi", "मक्का लॉट रिपोर्ट", "-hi.pdf"),
+        ("te", "మొక్కజొన్న లాట్ నివేదిక", "-te.pdf"),
+    ],
+)
+def test_pdf_report_uses_requested_language_and_embedded_unicode_font(
+    client, lang, title, suffix
+):
+    _upload(client, "lot_5.0")
+    response = client.get(f"/api/report.pdf?lang={lang}")
+    text = "\n".join(
+        page.extract_text() or ""
+        for page in PdfReader(io.BytesIO(response.content)).pages
+    )
+
+    assert response.content.startswith(b"%PDF-")
+    assert title in text
+    assert "lot_5.0" in text
+    assert "Note:" not in text
+    assert suffix in response.headers["content-disposition"]
+
+
+def test_invalid_pdf_language_falls_back_to_english(client):
+    _upload(client, "lot_5.0")
+    response = client.get("/api/report.pdf?lang=fr")
+    text = "\n".join(
+        page.extract_text() or ""
+        for page in PdfReader(io.BytesIO(response.content)).pages
+    )
+    assert "Maize lot report" in text
+    assert 'filename="maize-lot-report.pdf"' in response.headers[
+        "content-disposition"
+    ]
 
 
 @pytest.mark.parametrize("path", ["/api/report.csv", "/api/report.pdf"])

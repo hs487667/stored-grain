@@ -226,12 +226,16 @@ def create_app(
         )
 
     @app.get("/api/report.pdf")
-    def download_pdf(session: Session = Depends(visitor)):
+    def download_pdf(lang: str = "en", session: Session = Depends(visitor)):
+        locale = normalize_locale(lang)
+        suffix = "" if locale == "en" else f"-{locale}"
         return Response(
-            content=pdf_report(report_ranking(session)),
+            content=pdf_report(report_ranking(session), locale),
             media_type="application/pdf",
             headers={
-                "Content-Disposition": 'attachment; filename="maize-lot-report.pdf"'
+                "Content-Disposition": (
+                    f'attachment; filename="maize-lot-report{suffix}.pdf"'
+                )
             },
         )
 

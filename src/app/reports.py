@@ -4,9 +4,13 @@ from __future__ import annotations
 
 import csv
 import io
+from functools import lru_cache
+from pathlib import Path
 
 from reportlab.lib.colors import HexColor
 from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
 from src.app.i18n import normalize_locale, translate, translate_message
@@ -31,6 +35,13 @@ CSV_FIELDS = (
     "calibrated",
     "model_warnings",
 )
+
+FONTS = Path(__file__).parent / "fonts"
+FONT_MAP = {
+    "en": ("Helvetica", "Helvetica-Bold", False),
+    "hi": ("NotoSansDevanagari", "NotoSansDevanagari-Bold", True),
+    "te": ("NotoSansTelugu", "NotoSansTelugu-Bold", True),
+}
 
 
 def _number(value: float | None) -> str:
@@ -99,16 +110,32 @@ def csv_report(ranking: list[RankedLot], locale: str = "en") -> bytes:
     return output.getvalue().encode("utf-8-sig")
 
 
-def _safe(text: object) -> str:
-    return str(text).encode("latin-1", errors="replace").decode("latin-1")
+@lru_cache(maxsize=1)
+def _register_fonts() -> None:
+    for name, filename in (
+        ("NotoSansDevanagari", "NotoSansDevanagari-Regular.ttf"),
+        ("NotoSansDevanagari-Bold", "NotoSansDevanagari-Bold.ttf"),
+        ("NotoSansTelugu", "NotoSansTelugu-Regular.ttf"),
+        ("NotoSansTelugu-Bold", "NotoSansTelugu-Bold.ttf"),
+    ):
+        pdfmetrics.registerFont(TTFont(name, FONTS / filename, shapable=True))
+
+
+def _fonts(locale: str) -> tuple[str, str, bool]:
+    code = normalize_locale(locale)
+    if code != "en":
+        _register_fonts()
+    return FONT_MAP[code]
 
 
 def _ellipsise(text: object, limit: int) -> str:
-    value = _safe(text)
+    value = str(text)
     return value if len(value) <= limit else f"{value[:limit - 3]}..."
 
 
-def pdf_report(ranking: list[RankedLot]) -> bytes:
+def pdf_report(ranking: list[RankedLot], locale: str = "en") -> bytes:
+    code = normalize_locale(locale)
+    regular_font, bold_font, shaping = _fonts(code)
     output = io.BytesIO()
     document = canvas.Canvas(output, pagesize=A4, pageCompression=0, invariant=1)
     width, height = A4
@@ -126,17 +153,31 @@ def pdf_report(ranking: list[RankedLot]) -> bytes:
     pale_green = HexColor("#E5EFE9")
     white = HexColor("#FFFFFF")
 
-    document.setTitle("Maize lot evidence report")
+    document.setTitle(translate(code, "pdf.title"))
 
     page_number = 0
 
-    def metric(x: float, y: float, label: str, value: str) -> None:
+    def draw_string(x: float, y: float, text: object) -> None:
+        document.drawString(x, y, str(text), shaping=shaping)
+
+    def draw_right_string(x: float, y: float, text: object) -> None:
+        document.drawRightString(x, y, str(text), shaping=shaping)
+
+    def draw_centred_string(x: float, y: float, text: object) -> None:
+        document.drawCentredString(x, y, str(text), shaping=shaping)
+
+    def heading(text: str) -> str:
+        return text.upper() if code == "en" else text
+
+    def metric(
+        x: float, y: float, label: str, value: str, *, latin_value: bool = False
+    ) -> None:
         document.setFillColor(muted)
-        document.setFont("Helvetica-Bold", 6.8)
-        document.drawString(x, y, label.upper())
+        document.setFont(bold_font, 6.8)
+        draw_string(x, y, heading(label))
         document.setFillColor(ink)
-        document.setFont("Helvetica-Bold", 10.5)
-        document.drawString(x, y - 15, _safe(value))
+        document.setFont("Helvetica-Bold" if latin_value else bold_font, 10.5)
+        draw_string(x, y - 15, value)
 
     def start_page() -> float:
         nonlocal page_number
@@ -150,25 +191,46 @@ def pdf_report(ranking: list[RankedLot]) -> bytes:
         document.rect(0, height - 111, width, 3, stroke=0, fill=1)
 
         document.setFillColor(white)
-        document.setFont("Helvetica-Bold", 21)
-        document.drawString(margin, height - 48, "Maize lot report")
+        document.setFont(bold_font, 21)
+        draw_string(margin, height - 48, translate(code, "pdf.title"))
         document.setFillColor(HexColor("#DCE8E1"))
-        document.setFont("Helvetica", 9)
-        document.drawString(margin, height - 68, "Mechanical damage and deterioration ranking")
+        document.setFont(regular_font, 9)
+        draw_string(margin, height - 68, translate(code, "pdf.subtitle"))
         document.setFillColor(maize)
-        document.setFont("Helvetica-Bold", 7)
-        document.drawRightString(width - margin, height - 43, "SESSION EVIDENCE")
+        document.setFont(bold_font, 7)
+        draw_right_string(
+            width - margin,
+            height - 43,
+            heading(translate(code, "pdf.session_evidence")),
+        )
 
         summary_y = height - 155
         document.setFillColor(white)
         document.roundRect(margin, summary_y - 31, card_width, 46, 7, stroke=0, fill=1)
-        metric(margin + 18, summary_y, "Lots analysed", str(len(ranking)))
-        metric(margin + 180, summary_y, "Order", "Fastest degrading first")
-        metric(margin + 390, summary_y, "Primary output", "Relative ranking")
+        metric(
+            margin + 18,
+            summary_y,
+            translate(code, "pdf.lots_analysed"),
+            str(len(ranking)),
+        )
+        metric(
+            margin + 180,
+            summary_y,
+            translate(code, "pdf.order"),
+            translate(code, "pdf.fastest_first"),
+        )
+        metric(
+            margin + 390,
+            summary_y,
+            translate(code, "pdf.primary_output"),
+            translate(code, "pdf.relative_ranking"),
+        )
 
         document.setFillColor(muted)
-        document.setFont("Helvetica", 7)
-        document.drawCentredString(width / 2, 22, f"Page {page_number}")
+        document.setFont(regular_font, 7)
+        draw_centred_string(
+            width / 2, 22, f"{translate(code, 'pdf.page')} {page_number}"
+        )
         return summary_y - 55
 
     def draw_card(row: dict[str, str | int], top: float) -> None:
@@ -181,18 +243,34 @@ def pdf_report(ranking: list[RankedLot]) -> bytes:
         document.setFillColor(maize)
         document.roundRect(badge_x, badge_y, 42, 31, 6, stroke=0, fill=1)
         document.setFillColor(forest)
-        document.setFont("Helvetica-Bold", 7)
-        document.drawCentredString(badge_x + 21, badge_y + 19, "RANK")
-        document.setFont("Helvetica-Bold", 12)
-        document.drawCentredString(badge_x + 21, badge_y + 6, str(row["rank"]))
+        document.setFont(bold_font, 7)
+        draw_centred_string(
+            badge_x + 21,
+            badge_y + 19,
+            heading(translate(code, "pdf.rank")),
+        )
+        document.setFont(bold_font, 12)
+        draw_centred_string(badge_x + 21, badge_y + 6, row["rank"])
 
         document.setFillColor(ink)
         document.setFont("Helvetica-Bold", 14)
-        document.drawString(margin + 68, top - 28, _ellipsise(row["lot_id"], 44))
+        draw_string(margin + 68, top - 28, _ellipsise(row["lot_id"], 44))
         document.setFillColor(muted)
-        document.setFont("Helvetica", 7.5)
-        tie = f"Tied with {row['tied_with']}" if row["tied_with"] else "Independent rank"
-        document.drawString(margin + 68, top - 43, _ellipsise(tie, 70))
+        document.setFont(regular_font, 7.5)
+        if row["tied_with"]:
+            tie_label = f"{translate(code, 'pdf.tied_with')} "
+            draw_string(margin + 68, top - 43, tie_label)
+            tie_x = margin + 68 + pdfmetrics.stringWidth(
+                tie_label, regular_font, 7.5
+            )
+            document.setFont("Helvetica", 7.5)
+            draw_string(tie_x, top - 43, _ellipsise(row["tied_with"], 50))
+        else:
+            draw_string(
+                margin + 68,
+                top - 43,
+                translate(code, "pdf.independent_rank"),
+            )
 
         document.setStrokeColor(rule)
         document.setLineWidth(0.6)
@@ -203,17 +281,45 @@ def pdf_report(ranking: list[RankedLot]) -> bytes:
         col_3 = margin + 350
         row_1 = top - 77
         row_2 = top - 117
-        metric(col_1, row_1, "Temperature", f"{row['temperature_c']} C")
-        metric(col_2, row_1, "Moisture", f"{row['moisture_pct_wb']}% wb")
-        metric(col_3, row_1, "Kernels counted", str(row["kernels_counted"]))
+        metric(
+            col_1,
+            row_1,
+            translate(code, "pdf.temperature"),
+            f"{row['temperature_c']} °C",
+            latin_value=True,
+        )
+        metric(
+            col_2,
+            row_1,
+            translate(code, "pdf.moisture"),
+            f"{row['moisture_pct_wb']}% wb",
+            latin_value=True,
+        )
+        metric(
+            col_3,
+            row_1,
+            translate(code, "pdf.kernels_counted"),
+            str(row["kernels_counted"]),
+        )
         metric(
             col_1,
             row_2,
-            "Mechanical damage",
-            f"{row['mechanical_damage_mass_pct']}% mass",
+            translate(code, "pdf.mechanical_damage"),
+            f"{row['mechanical_damage_mass_pct']}% {translate(code, 'pdf.mass')}",
         )
-        metric(col_2, row_2, "Resolvable gap", f"{row['resolvable_gap_pct']} points")
-        metric(col_3, row_2, "Degradation rate", str(row["degradation_rate"]))
+        metric(
+            col_2,
+            row_2,
+            translate(code, "pdf.resolvable_gap"),
+            f"{row['resolvable_gap_pct']} {translate(code, 'pdf.points')}",
+        )
+        metric(
+            col_3,
+            row_2,
+            translate(code, "pdf.degradation_rate"),
+            str(row["degradation_rate"]),
+            latin_value=True,
+        )
 
         band_x = margin + 14
         band_y = bottom + 12
@@ -221,21 +327,29 @@ def pdf_report(ranking: list[RankedLot]) -> bytes:
         document.setFillColor(pale_green)
         document.roundRect(band_x, band_y, band_width, 29, 5, stroke=0, fill=1)
         document.setFillColor(forest)
-        document.setFont("Helvetica-Bold", 7)
-        document.drawString(band_x + 12, band_y + 17, "DAYS TO 0.5% DML")
-        document.setFont("Helvetica-Bold", 10)
+        document.setFont(bold_font, 7)
+        draw_string(
+            band_x + 12,
+            band_y + 17,
+            heading(translate(code, "pdf.days_to_loss")),
+        )
+        document.setFont(bold_font, 10)
         days = row["days_to_threshold"]
-        day_value = f"{days} days" if days else "Withheld"
-        document.drawString(band_x + 12, band_y + 6, day_value)
-        document.setFont("Helvetica-Bold", 7)
-        document.drawRightString(
+        day_value = (
+            f"{days} {translate(code, 'value.days')}"
+            if days
+            else translate(code, "value.withheld")
+        )
+        draw_string(band_x + 12, band_y + 6, day_value)
+        document.setFont(bold_font, 7)
+        draw_right_string(
             band_x + band_width - 12,
             band_y + 11,
-            f"Mode: {row['mode']}",
+            f"{translate(code, 'pdf.mode')}: {row['mode']}",
         )
 
     y = start_page()
-    for row in _rows(ranking):
+    for row in _rows(ranking, code):
         if y - card_height < 34:
             document.showPage()
             y = start_page()
