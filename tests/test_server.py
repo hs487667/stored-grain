@@ -205,6 +205,18 @@ def test_the_page_exposes_the_measurement_flow_to_assistive_technology(client):
     assert "Rank lots" in response.text
 
 
+def test_page_exposes_accessible_non_persistent_language_choices(client):
+    response = client.get("/")
+    assert 'class="language-switcher"' in response.text
+    assert 'data-locale="en"' in response.text
+    assert 'data-locale="hi"' in response.text
+    assert 'data-locale="te"' in response.text
+    assert "हिन्दी" in response.text
+    assert "తెలుగు" in response.text
+    assert 'src="/static/i18n.js"' in response.text
+    assert "localStorage" not in response.text
+
+
 def test_the_models_are_loaded_once_not_per_photograph():
     # Model load is 1.2 s. Per-request loading would make the app unusable and
     # would be invisible in a test that only checks the numbers.

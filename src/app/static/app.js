@@ -3,6 +3,7 @@
 (function () {
 
   var SCAN_MS = 900;
+  var t = window.GrainI18n.t;
 
   var form = document.getElementById("capture-form");
   var lotInput = document.getElementById("f-lot");
@@ -17,10 +18,16 @@
   var resultBody = document.getElementById("result-body");
   var rankingBody = document.getElementById("ranking-body");
   var reportActions = document.getElementById("report-actions");
+  var pdfLink = document.getElementById("pdf-download");
+  var csvLink = document.getElementById("csv-download");
   var resetBtn = document.getElementById("reset");
 
   var busy = false;
   var shownLot = null;
+  var currentSession = { lots: [], ranking: [] };
+  var shownReading = null;
+  var shownOverlaySrc = null;
+  var currentStatus = null;
 
   // ---------------------------------------------------------------- helpers
 
@@ -50,11 +57,25 @@
   }
 
   function setStatus(tone, text) {
+    currentStatus = { tone: tone, text: text };
     statusEl.textContent = text;
     if (tone) {
       statusEl.setAttribute("data-tone", tone);
     } else {
       statusEl.removeAttribute("data-tone");
+    }
+  }
+
+  function setTranslatedStatus(tone, key, values) {
+    currentStatus = { tone: tone, key: key, values: values || {} };
+    statusEl.textContent = t(key, values);
+    if (tone) statusEl.setAttribute("data-tone", tone);
+    else statusEl.removeAttribute("data-tone");
+  }
+
+  function rerenderStatus() {
+    if (currentStatus && currentStatus.key) {
+      statusEl.textContent = t(currentStatus.key, currentStatus.values);
     }
   }
 
@@ -82,15 +103,14 @@
   ApiError.prototype = Object.create(Error.prototype);
 
   function messageForStatus(status, detail) {
+    if (status === 415) return t("error.not_image");
+    if (status === 422) return t("error.no_kernels");
+    if (status === 413) return t("error.photo_too_large");
+    if (status === 429) return t("error.too_many");
+    if (status >= 500) return t("error.server_unavailable");
     if (detail) return detail;
-    if (status === 415) return "That file is not an image. Upload a JPEG or PNG of the tray.";
-    if (status === 422) return "No kernels found. Reshoot with the tray filling the frame under even light.";
-    if (status === 404) return "That lot is no longer on the server.";
-    if (status === 500) return "The server failed on that request. Try again with a different frame.";
-    if (status === 413) return "That photograph is too large. Send a smaller image.";
-    if (status === 429) return "Too many measurements. Wait a moment and try again.";
-    if (status >= 500) return "The server is not answering correctly. Try again shortly.";
-    return "The server rejected that request (" + status + ").";
+    if (status === 404) return t("error.server_request");
+    return t("error.rejected", { status: status });
   }
 
   function readDetail(response) {
@@ -118,7 +138,7 @@
         if (response.ok) {
           if (response.status === 204) return null;
           return response.json().catch(function () {
-            throw new ApiError("The server sent a reply this page could not read.");
+            throw new ApiError(t("error.bad_reply"));
           });
         }
         return readDetail(response).then(function (detail) {
@@ -126,13 +146,13 @@
         });
       },
       function () {
-        throw new ApiError("Cannot reach the server. It may be asleep — wait a moment and try again.");
+        throw new ApiError(t("error.network"));
       }
     );
   }
 
   function errorText(err) {
-    return err && err.message ? err.message : "Something failed and the cause is unknown. Try again.";
+    return err && err.message ? err.message : t("error.unknown");
   }
 
   // ------------------------------------------------------------- tie groups
@@ -215,13 +235,14 @@
 
   function rungMarkup(entry, rank, tied, maxRate) {
     var lot = esc(entry.lot_id);
+    var remove = esc(t("ranking.remove", { lot: entry.lot_id }));
     return '<li class="rung" data-rank="' + esc(rank) + '" data-tied="' + (tied ? "true" : "false") + '">' +
       '<span class="rung-rank num">' + esc(rank) + "</span>" +
       '<span class="rung-lot">' + lot + "</span>" +
       '<span class="rung-bar"><span class="rung-fill" style="--fill: ' + fillPercent(entry, maxRate) + '%"></span></span>' +
       '<span class="rung-value num">' + fixed(entry.damage_mass_pct, 2) + "%</span>" +
-      '<span class="rung-rate num">rate ' + fixed(entry.degradation_rate, 4) + "</span>" +
-      '<button type="button" class="rung-remove" data-lot="' + lot + '" aria-label="Remove ' + lot + '">Remove</button>' +
+      '<span class="rung-rate"><span>' + esc(t("ranking.rate")) + '</span> <span class="num">' + fixed(entry.degradation_rate, 4) + "</span></span>" +
+      '<button type="button" class="rung-remove" data-lot="' + lot + '" aria-label="' + remove + '">' + remove + "</button>" +
       "</li>";
   }
 
@@ -232,8 +253,7 @@
 
     return '<li class="tie-group">' +
       '<div class="tie-bracket" aria-hidden="true"></div>' +
-      '<p class="tie-note">Cannot be separated at this sample size — the damage gap is smaller than <span class="num">' +
-      fixed(group.gap, 2) + "</span> points.</p>" +
+      '<p class="tie-note">' + esc(t("ranking.tie", { gap: fixed(group.gap, 2) })) + "</p>" +
       '<ol class="tie-rungs">' + rungs + "</ol>" +
       "</li>";
   }
@@ -242,7 +262,7 @@
     var entries = (ranking || []).slice().sort(byRankThenDamage);
 
     if (!entries.length) {
-      rankingBody.innerHTML = '<p class="empty">No lots yet. Photograph a tray to start the ranking.</p>';
+      rankingBody.innerHTML = '<p class="empty">' + esc(t("ranking.empty")) + "</p>";
       return;
     }
 
@@ -267,21 +287,41 @@
 
   // -------------------------------------------------------- reading markup
 
+  function localizedValue(prefix, value) {
+    var key = prefix + value;
+    var localized = t(key);
+    return localized === key ? String(value) : localized;
+  }
+
+  function localizedMode(mode) {
+    if (mode === "ranking+absolute" || mode === "ranking_absolute") {
+      return t("mode.ranking_absolute");
+    }
+    return localizedValue("mode.", mode);
+  }
+
+  function translatedMessages(descriptors, fallbacks) {
+    if (Array.isArray(descriptors) && descriptors.length) {
+      return descriptors.map(window.GrainI18n.message);
+    }
+    return (fallbacks || []).map(String);
+  }
+
   function biologicalSummary(biological) {
     var names = biological ? Object.keys(biological) : [];
-    if (!names.length) return "none reported";
+    if (!names.length) return esc(t("reading.none_reported"));
     return names.map(function (name) {
-      return esc(name) + ' <span class="num">' + fixed(biological[name], 1) + "%</span>";
+      return esc(localizedValue("class.", name)) + ' <span class="num">' + fixed(biological[name], 1) + "%</span>";
     }).join(", ");
   }
 
   function figureMarkup(state, src) {
     return '<figure class="shot" data-state="' + esc(state) + '">' +
-      '<img class="shot-img" alt="Tray with each detected kernel outlined" src="' + esc(src) + '">' +
+      '<img class="shot-img" alt="' + esc(t("reading.overlay_alt")) + '" src="' + esc(src) + '">' +
       '<div class="scanline" aria-hidden="true"></div>' +
       '<figcaption class="legend">' +
-      '<span class="key key-damage">counted as damage</span>' +
-      '<span class="key key-sound">not counted</span>' +
+      '<span class="key key-damage">' + esc(t("reading.legend.damage")) + "</span>" +
+      '<span class="key key-sound">' + esc(t("reading.legend.sound")) + "</span>" +
       "</figcaption></figure>";
   }
 
@@ -301,51 +341,52 @@
       '<div class="readout">' +
       '<p class="readout-value"><span class="num">' + fixed(reading.damage_mass_pct, 2) +
       '</span><span class="pct">%</span></p>' +
-      '<p class="readout-label">mechanical damage by weight</p>' +
-      '<p class="readout-band">&plusmn;<span class="num">' + fixed(reading.resolvable_gap_pct, 2) +
-      '</span> resolvable &middot; <span class="num">' + whole(reading.kernels_counted) +
-      "</span> kernels counted</p></div>"
+      '<p class="readout-label">' + esc(t("reading.damage_by_weight")) + "</p>" +
+      '<p class="readout-band">' + esc(t("reading.resolvable", {
+        gap: fixed(reading.resolvable_gap_pct, 2),
+        count: whole(reading.kernels_counted)
+      })) + "</p></div>"
     );
 
     parts.push(
       '<dl class="facts">' +
-      '<div class="fact"><dt>By count</dt><dd class="num">' + fixed(reading.damage_count_pct, 2) + "%</dd></div>" +
-      '<div class="fact"><dt>Temperature</dt><dd class="num">' + fixed(reading.temperature_c, 1) + " &deg;C</dd></div>" +
-      '<div class="fact"><dt>Moisture</dt><dd class="num">' + fixed(reading.moisture_pct_wb, 1) + "% wb</dd></div>" +
-      '<div class="fact"><dt>Days to 0.5% loss</dt><dd class="num">' + daysSummary(reading) + "</dd></div>" +
-      '<div class="fact"><dt>Mode</dt><dd>' + esc(reading.mode) + "</dd></div>" +
+      '<div class="fact"><dt>' + esc(t("reading.by_count")) + '</dt><dd class="num">' + fixed(reading.damage_count_pct, 2) + "%</dd></div>" +
+      '<div class="fact"><dt>' + esc(t("reading.temperature")) + '</dt><dd class="num">' + fixed(reading.temperature_c, 1) + " &deg;C</dd></div>" +
+      '<div class="fact"><dt>' + esc(t("reading.moisture")) + '</dt><dd class="num">' + fixed(reading.moisture_pct_wb, 1) + "% wb</dd></div>" +
+      '<div class="fact"><dt>' + esc(t("reading.days_to_loss")) + '</dt><dd class="num">' + daysSummary(reading) + "</dd></div>" +
+      '<div class="fact"><dt>' + esc(t("reading.mode")) + "</dt><dd>" + esc(localizedMode(reading.mode)) + "</dd></div>" +
       '<div class="fact fact-wide">' +
-      "<dt>Biological deterioration, withheld from the model</dt>" +
+      "<dt>" + esc(t("reading.biological")) + "</dt>" +
       "<dd>" + biologicalSummary(reading.biological_pct) + "</dd></div>" +
       "</dl>"
     );
 
     if (reading.calibrated !== true) {
       parts.push(
-        '<p class="caveat caveat-uncorrected">Uncorrected reading. The classifier errs in both ' +
-        "directions, overstating clean grain and understating heavily damaged grain. Correction " +
-        "is off because it does not transfer between imaging sessions.</p>"
+        '<p class="caveat caveat-uncorrected">' + esc(t("reading.uncorrected")) + "</p>"
       );
     }
 
-    var reasons = Array.isArray(reading.suppression_reasons) ? reading.suppression_reasons.filter(Boolean) : [];
+    var reasons = translatedMessages(reading.suppression_messages, reading.suppression_reasons).filter(Boolean);
     if (reasons.length) {
       parts.push(
-        '<p class="caveat caveat-gated">Days to threshold withheld: ' +
-        reasons.map(esc).join("; ") + "</p>"
+        '<p class="caveat caveat-gated">' + esc(t("reading.threshold_withheld", {
+          reasons: reasons.join("; ")
+        })) + "</p>"
       );
     }
 
-    var modelNotes = Array.isArray(reading.model_notes) ? reading.model_notes.filter(Boolean) : [];
+    var modelNotes = translatedMessages(reading.model_messages, reading.model_notes).filter(Boolean);
     if (modelNotes.length) {
       parts.push('<p class="caveat caveat-source">' + modelNotes.map(esc).join(" ") + "</p>");
     }
 
-    var notes = Array.isArray(reading.range_notes) ? reading.range_notes.filter(Boolean) : [];
+    var notes = translatedMessages(reading.range_messages, reading.range_notes).filter(Boolean);
     if (reading.ranges_ok === false) {
       parts.push(
-        '<p class="caveat caveat-range">Outside the published validity range: ' +
-        (notes.length ? notes.map(esc).join("; ") : "the server did not say which input.") + "</p>"
+        '<p class="caveat caveat-range">' + esc(t("reading.outside_range", {
+          reasons: notes.length ? notes.join("; ") : t("reading.range_unknown")
+        })) + "</p>"
       );
     }
 
@@ -357,17 +398,23 @@
   }
 
   function showScanning(previewSrc) {
+    shownReading = null;
+    shownOverlaySrc = null;
     resultBody.innerHTML = figureMarkup("loading", previewSrc);
     resultPanel.hidden = false;
   }
 
   function showReading(reading, overlaySrc) {
+    shownReading = reading;
+    shownOverlaySrc = overlaySrc;
     resultBody.innerHTML = readingMarkup(reading, overlaySrc);
     resultPanel.hidden = false;
     shownLot = reading.lot_id;
   }
 
   function clearReading() {
+    shownReading = null;
+    shownOverlaySrc = null;
     resultBody.innerHTML = "";
     resultPanel.hidden = true;
     shownLot = null;
@@ -377,13 +424,21 @@
 
   function applySession(data) {
     var lots = (data && data.lots) || [];
-    renderRanking((data && data.ranking) || []);
+    currentSession = { lots: lots, ranking: (data && data.ranking) || [] };
+    renderRanking(currentSession.ranking);
     reportActions.hidden = lots.length === 0;
     resetBtn.hidden = lots.length === 0;
+    updateReportLinks();
 
     if (shownLot && !lots.some(function (lot) { return lot.lot_id === shownLot; })) {
       clearReading();
     }
+  }
+
+  function updateReportLinks() {
+    var locale = encodeURIComponent(window.GrainI18n.getLocale());
+    pdfLink.href = "/api/report.pdf?lang=" + locale;
+    csvLink.href = "/api/report.csv?lang=" + locale;
   }
 
   function refreshSession() {
@@ -408,7 +463,7 @@
   function adoptFile(file) {
     if (!file) return;
     if (file.type && file.type.indexOf("image/") !== 0) {
-      setStatus("error", "That file is not an image. Drop a JPEG or PNG of the tray.");
+      setTranslatedStatus("error", "error.not_image");
       return;
     }
     var transfer = new DataTransfer();
@@ -452,10 +507,10 @@
   // ------------------------------------------------------------- measuring
 
   function firstProblem() {
-    if (!lotInput.value.trim()) return "Name the lot before measuring.";
-    if (!photoInput.files || !photoInput.files[0]) return "Add a photograph of the tray before measuring.";
-    if (!isFinite(parseFloat(tempInput.value))) return "Enter the storage temperature in degrees Celsius.";
-    if (!isFinite(parseFloat(moistInput.value))) return "Enter the moisture content as percent wet basis.";
+    if (!lotInput.value.trim()) return t("validation.lot");
+    if (!photoInput.files || !photoInput.files[0]) return t("validation.photo");
+    if (!isFinite(parseFloat(tempInput.value))) return t("validation.temperature");
+    if (!isFinite(parseFloat(moistInput.value))) return t("validation.moisture");
     return null;
   }
 
@@ -480,7 +535,7 @@
     var minimumScan = reduceMotion() ? 0 : SCAN_MS;
 
     setBusy(true);
-    setStatus("working", "Measuring the tray…");
+    setTranslatedStatus("working", "status.measuring");
     showScanning(previewUrl);
 
     var measured = request("/api/lots", { method: "POST", body: new FormData(form) });
@@ -492,11 +547,11 @@
         return loadImage(src).then(
           function () {
             showReading(reading, src);
-            setStatus("done", "Measured " + reading.lot_id + ".");
+            setTranslatedStatus("done", "status.measured", { lot: reading.lot_id });
           },
           function () {
             showReading(reading, null);
-            setStatus("error", "Measured " + reading.lot_id + ", but the outlined image did not load. Reload to see it.");
+            setTranslatedStatus("error", "status.overlay_failed", { lot: reading.lot_id });
           }
         );
       })
@@ -523,7 +578,7 @@
 
     var lotId = button.getAttribute("data-lot");
     setBusy(true);
-    setStatus("working", "Removing " + lotId + "…");
+    setTranslatedStatus("working", "status.removing", { lot: lotId });
 
     request("/api/lots/" + encodeURIComponent(lotId), { method: "DELETE" })
       .then(function () {
@@ -531,7 +586,7 @@
         return refreshSession();
       })
       .then(function () {
-        setStatus("done", "Removed " + lotId + ".");
+        setTranslatedStatus("done", "status.removed", { lot: lotId });
       })
       .catch(function (err) {
         setStatus("error", errorText(err));
@@ -543,10 +598,10 @@
 
   resetBtn.addEventListener("click", function () {
     if (busy) return;
-    if (!window.confirm("Clear every lot in this session? This cannot be undone.")) return;
+    if (!window.confirm(t("confirm.clear_session"))) return;
 
     setBusy(true);
-    setStatus("working", "Clearing the session…");
+    setTranslatedStatus("working", "status.clearing");
 
     request("/api/session/reset", { method: "POST" })
       .then(function () {
@@ -554,7 +609,7 @@
         return refreshSession();
       })
       .then(function () {
-        setStatus("done", "Session cleared.");
+        setTranslatedStatus("done", "status.cleared");
       })
       .catch(function (err) {
         setStatus("error", errorText(err));
@@ -566,12 +621,32 @@
 
   // ----------------------------------------------------------------- start
 
-  showChosenFile(photoInput.files && photoInput.files[0]);
-  renderRanking([]);
+  window.GrainI18n.init().then(function () {
+    window.GrainI18n.subscribe(function () {
+      renderRanking(currentSession.ranking);
+      if (shownReading) resultBody.innerHTML = readingMarkup(shownReading, shownOverlaySrc);
+      rerenderStatus();
+      updateReportLinks();
+    });
 
-  refreshSession().catch(function (err) {
-    rankingBody.innerHTML = '<p class="empty">' + esc(errorText(err)) + "</p>";
-    setStatus("error", errorText(err));
+    document.querySelectorAll("[data-locale]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        window.GrainI18n.setLocale(button.getAttribute("data-locale")).catch(function () {
+          setTranslatedStatus("error", "error.language_load");
+        });
+      });
+    });
+
+    showChosenFile(photoInput.files && photoInput.files[0]);
+    renderRanking([]);
+    updateReportLinks();
+
+    refreshSession().catch(function (err) {
+      rankingBody.innerHTML = '<p class="empty">' + esc(errorText(err)) + "</p>";
+      setStatus("error", errorText(err));
+    });
+  }).catch(function () {
+    setStatus("error", "Could not load the selected language.");
   });
 
 }());

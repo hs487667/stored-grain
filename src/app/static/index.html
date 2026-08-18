@@ -5,53 +5,53 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light">
 <meta name="theme-color" content="#103a2b">
-<meta name="description" content="Measure mechanical damage in shelled maize from a photograph, and rank storage lots by how fast they are degrading.">
-<title>Maize field assay</title>
+<meta name="description" content="Measure mechanical damage in shelled maize from a photograph, and rank storage lots by how fast they are degrading." data-i18n-content="meta.description">
+<title data-i18n="meta.title">Maize field assay</title>
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
 
-<a class="skip" href="#capture">Skip to capture</a>
+<a class="skip" href="#capture" data-i18n="skip.capture">Skip to capture</a>
 
 <div class="topbar">
-  <p class="brand"><span class="brand-mark" aria-hidden="true"></span>Grain field assay</p>
-  <p class="build-state"><span aria-hidden="true"></span>Research prototype</p>
+  <p class="brand"><span class="brand-mark" aria-hidden="true"></span><span data-i18n="topbar.brand">Grain field assay</span></p>
+  <div class="language-switcher" role="group" aria-label="Language" data-i18n-aria-label="language.aria">
+    <button type="button" data-locale="en" aria-pressed="true">English</button>
+    <button type="button" data-locale="hi" aria-pressed="false">हिन्दी</button>
+    <button type="button" data-locale="te" aria-pressed="false">తెలుగు</button>
+  </div>
+  <p class="build-state"><span aria-hidden="true"></span><span data-i18n="topbar.prototype">Research prototype</span></p>
 </div>
 
 <div class="provenance" role="note">
   <span class="provenance-mark" aria-hidden="true">!</span>
-  <p><strong>Validation boundary</strong> — trained on synthetic trays from one
-  laboratory rig. No phone photograph has been validated against ground truth;
-  every number is provisional.</p>
+  <p><strong data-i18n="boundary.label">Validation boundary</strong> — <span data-i18n="boundary.text">trained on synthetic trays from one laboratory rig. No phone photograph has been validated against ground truth; every number is provisional.</span></p>
 </div>
 
 <header class="masthead">
   <div class="hero-copy">
-    <p class="eyebrow">Image-assisted maize assessment</p>
-    <h1 class="wordmark">Know which lot<br><span>needs attention first.</span></h1>
-    <p class="standfirst">
-      Photograph a tray. The assay counts visible mechanical damage and turns
-      it into a defensible storage-priority ranking.
-    </p>
+    <p class="eyebrow" data-i18n="hero.eyebrow">Image-assisted maize assessment</p>
+    <h1 class="wordmark"><span data-i18n="hero.title.line1">Know which lot</span><br><span data-i18n="hero.title.line2">needs attention first.</span></h1>
+    <p class="standfirst" data-i18n="hero.description">Photograph a tray. The assay counts visible mechanical damage and turns it into a defensible storage-priority ranking.</p>
     <dl class="premise">
-      <div><dt>Measurement</dt><dd>damage by mass</dd></div>
-      <div><dt>Decision</dt><dd>relative lot priority</dd></div>
-      <div><dt>Reference</dt><dd>Steele, 1967</dd></div>
+      <div><dt data-i18n="premise.measurement.label">Measurement</dt><dd data-i18n="premise.measurement.value">damage by mass</dd></div>
+      <div><dt data-i18n="premise.decision.label">Decision</dt><dd data-i18n="premise.decision.value">relative lot priority</dd></div>
+      <div><dt data-i18n="premise.reference.label">Reference</dt><dd data-i18n="premise.reference.value">Steele, 1967</dd></div>
     </dl>
   </div>
 
-  <ol class="process-rail" aria-label="Measurement flow">
+  <ol class="process-rail" aria-label="Measurement flow" data-i18n-aria-label="flow.aria">
     <li>
       <span class="stage-mark" aria-hidden="true"><span></span></span>
-      <span class="stage-copy"><b>Capture sample</b><small>One tray photograph</small></span>
+      <span class="stage-copy"><b data-i18n="flow.capture.title">Capture sample</b><small data-i18n="flow.capture.detail">One tray photograph</small></span>
     </li>
     <li>
       <span class="stage-mark" aria-hidden="true"><span></span></span>
-      <span class="stage-copy"><b>Measure kernels</b><small>Damage by weight</small></span>
+      <span class="stage-copy"><b data-i18n="flow.measure.title">Measure kernels</b><small data-i18n="flow.measure.detail">Damage by weight</small></span>
     </li>
     <li>
       <span class="stage-mark" aria-hidden="true"><span></span></span>
-      <span class="stage-copy"><b>Rank lots</b><small>Fastest degrading first</small></span>
+      <span class="stage-copy"><b data-i18n="flow.rank.title">Rank lots</b><small data-i18n="flow.rank.detail">Fastest degrading first</small></span>
     </li>
   </ol>
 </header>
@@ -60,19 +60,19 @@
 
   <section id="capture" class="panel panel-capture" aria-labelledby="capture-h">
     <div class="section-heading">
-      <p class="section-index">Input station</p>
-      <h2 id="capture-h" class="panel-title">Capture a sample</h2>
-      <p class="section-copy">Use an evenly lit tray with separated kernels.</p>
+      <p class="section-index" data-i18n="capture.index">Input station</p>
+      <h2 id="capture-h" class="panel-title" data-i18n="capture.title">Capture a sample</h2>
+      <p class="section-copy" data-i18n="capture.description">Use an evenly lit tray with separated kernels.</p>
     </div>
     <form id="capture-form" novalidate>
       <div class="field">
-        <label for="f-lot">Lot name</label>
+        <label for="f-lot" data-i18n="field.lot">Lot name</label>
         <input id="f-lot" name="lot_id" required autocomplete="off"
-               placeholder="brand A, bag 2">
+               placeholder="brand A, bag 2" data-i18n-placeholder="field.lot.placeholder">
       </div>
       <div class="field-row">
         <div class="field">
-          <label for="f-temp">Temperature</label>
+          <label for="f-temp" data-i18n="field.temperature">Temperature</label>
           <div class="with-unit">
             <input id="f-temp" name="temperature_c" type="number" step="0.1"
                    value="25" required inputmode="decimal">
@@ -80,7 +80,7 @@
           </div>
         </div>
         <div class="field">
-          <label for="f-moist">Moisture</label>
+          <label for="f-moist" data-i18n="field.moisture">Moisture</label>
           <div class="with-unit">
             <input id="f-moist" name="moisture_pct_wb" type="number" step="0.1"
                    value="14" required inputmode="decimal">
@@ -89,17 +89,17 @@
         </div>
       </div>
       <div class="field field-photo">
-        <label for="f-photo" id="photo-label">Tray photograph</label>
+        <label for="f-photo" id="photo-label" data-i18n="field.photo">Tray photograph</label>
         <input id="f-photo" name="photo" type="file" accept="image/*"
                capture="environment" required>
         <label class="dropzone" id="dropzone" for="f-photo" data-empty="true">
           <span class="dropzone-icon" aria-hidden="true"></span>
-          <span class="dropzone-primary">Photograph tray</span>
-          <span class="dropzone-secondary">or drop a JPEG / PNG here</span>
+          <span class="dropzone-primary" data-i18n="field.photo.primary">Photograph tray</span>
+          <span class="dropzone-secondary" data-i18n="field.photo.secondary">or drop a JPEG / PNG here</span>
           <span class="dropzone-filename" id="photo-filename"></span>
         </label>
       </div>
-      <button type="submit" id="measure"><span>Measure this lot</span><span aria-hidden="true">→</span></button>
+      <button type="submit" id="measure"><span data-i18n="action.measure">Measure this lot</span><span aria-hidden="true">→</span></button>
     </form>
     <p id="status" class="status" role="status" aria-live="polite"></p>
   </section>
@@ -108,27 +108,24 @@
 
     <section id="result" class="panel panel-result" aria-labelledby="result-h" hidden>
       <div class="section-heading section-heading-row">
-        <div><p class="section-index">Latest assay</p><h2 id="result-h" class="panel-title">Reading</h2></div>
-        <span class="live-chip"><span aria-hidden="true"></span>Measured</span>
+        <div><p class="section-index" data-i18n="result.index">Latest assay</p><h2 id="result-h" class="panel-title" data-i18n="result.title">Reading</h2></div>
+        <span class="live-chip"><span aria-hidden="true"></span><span data-i18n="result.measured">Measured</span></span>
       </div>
       <div id="result-body"></div>
     </section>
 
     <section id="ranking" class="panel panel-ranking" aria-labelledby="ranking-h">
       <div class="section-heading section-heading-row">
-        <div><p class="section-index">Session queue</p><h2 id="ranking-h" class="panel-title">Lot priority</h2></div>
-        <span class="method-chip">Rate indexed</span>
+        <div><p class="section-index" data-i18n="ranking.index">Session queue</p><h2 id="ranking-h" class="panel-title" data-i18n="ranking.title">Lot priority</h2></div>
+        <span class="method-chip" data-i18n="ranking.method">Rate indexed</span>
       </div>
-      <p class="gated">
-        Lots are ordered by degradation rate. Days appear only inside
-        Steele&rsquo;s published temperature, moisture and damage ranges.
-      </p>
+      <p class="gated" data-i18n="ranking.description">Lots are ordered by degradation rate. Days appear only inside Steele&rsquo;s published temperature, moisture and damage ranges.</p>
       <div id="ranking-body"></div>
       <div id="report-actions" class="report-actions" hidden>
-        <a class="quiet report-download" href="/api/report.pdf" download>Download PDF</a>
-        <a class="quiet report-download" href="/api/report.csv" download>Download CSV</a>
+        <a id="pdf-download" class="quiet report-download" href="/api/report.pdf" download data-i18n="action.download_pdf">Download PDF</a>
+        <a id="csv-download" class="quiet report-download" href="/api/report.csv" download data-i18n="action.download_csv">Download CSV</a>
       </div>
-      <button id="reset" class="quiet" hidden>Clear session</button>
+      <button id="reset" class="quiet" hidden data-i18n="action.clear_session">Clear session</button>
     </section>
 
   </div>
@@ -136,16 +133,13 @@
 
 <footer class="colophon">
   <p class="footer-mark">G / 01</p>
-  <p class="footer-copy">
-    Measures the input a published deterioration model needs, so the model can
-    run without hand-counting kernels. Validates the measurement, not the
-    storage model.
-  </p>
+  <p class="footer-copy" data-i18n="footer.description">Measures the input a published deterioration model needs, so the model can run without hand-counting kernels. Validates the measurement, not the storage model.</p>
   <p class="cites">
     Steele 1967 &middot; Bern 2002
   </p>
 </footer>
 
+<script src="/static/i18n.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

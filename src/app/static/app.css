@@ -142,6 +142,29 @@ input,
   text-transform: uppercase;
 }
 
+.language-switcher {
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: var(--radius-sm);
+}
+
+.language-switcher button {
+  min-block-size: 44px;
+  padding-inline: var(--s3);
+  border: 0;
+  border-inline-end: 1px solid rgba(255, 255, 255, 0.2);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.language-switcher button:last-child { border-inline-end: 0; }
+.language-switcher button[aria-pressed="true"] { background: var(--maize); color: var(--forest-950); font-weight: 700; }
+.language-switcher button:focus-visible { position: relative; z-index: 1; outline-offset: -3px; }
+
 .brand-mark {
   position: relative;
   inline-size: 12px;
@@ -1053,9 +1076,10 @@ input[type="number"]::-webkit-inner-spin-button { appearance: none; margin: 0; }
 
 @media (max-width: 580px) {
   :root { --gutter: 1rem; --radius: 12px; }
-  .topbar { min-block-size: 48px; }
-  .build-state { font-size: 0; }
-  .build-state::after { content: "Prototype"; font-size: 0.62rem; }
+  .topbar { flex-wrap: wrap; min-block-size: 48px; padding-block: var(--s2); }
+  .brand, .build-state { font-size: 0.58rem; }
+  .language-switcher { order: 3; inline-size: 100%; }
+  .language-switcher button { flex: 1 1 0; padding-inline: var(--s2); }
   .provenance { align-items: flex-start; font-size: 0.71rem; }
   .masthead { padding-block: var(--s7); }
   .wordmark { font-size: clamp(3rem, 15vw, 4.5rem); }
