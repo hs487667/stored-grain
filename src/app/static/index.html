@@ -2,50 +2,110 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Measure mechanical damage in shelled maize from a photograph, and rank storage lots by how fast they are degrading.">
 <title>Maize damage capture</title>
 <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
 
-<p class="provenance">
-  These models were trained on synthetic trays composed from one laboratory
-  imaging rig. <strong>No phone photograph has been validated against ground
-  truth.</strong> Every number below is provisional.
+<a class="skip" href="#capture">Skip to capture</a>
+
+<p class="provenance" role="note">
+  <span class="provenance-mark" aria-hidden="true"></span>
+  <span>These models were trained on synthetic trays composed from one
+  laboratory imaging rig. <strong>No phone photograph has been validated
+  against ground truth.</strong> Every number here is provisional.</span>
 </p>
 
-<nav>
-  <button id="tab-capture" class="active">Capture</button>
-  <button id="tab-ranking">Ranking</button>
-</nav>
+<header class="masthead">
+  <h1 class="wordmark">Maize damage capture</h1>
+  <p class="standfirst">
+    Photograph a tray of shelled maize. The system counts kernels with a
+    ruptured seed coat, and orders your lots by how fast each is degrading.
+  </p>
+  <dl class="premise">
+    <div><dt>Measures</dt><dd>mechanical damage, percent by weight</dd></div>
+    <div><dt>Outputs</dt><dd>a ranking, not a spoilage date</dd></div>
+    <div><dt>Model</dt><dd>Thompson 1972 dry-matter loss</dd></div>
+  </dl>
+</header>
 
-<section id="capture">
-  <form id="capture-form">
-    <label>Lot name
-      <input name="lot_id" required placeholder="brand A, bag 2">
-    </label>
-    <label>Temperature, &deg;C
-      <input name="temperature_c" type="number" step="0.1" value="25" required>
-    </label>
-    <label>Moisture, % wet basis
-      <input name="moisture_pct_wb" type="number" step="0.1" value="14" required>
-    </label>
-    <label class="camera">Photograph the tray
-      <input name="photo" type="file" accept="image/*" capture="environment" required>
-    </label>
-    <button type="submit">Measure</button>
-  </form>
-  <p id="status" role="status"></p>
-  <article id="result" hidden></article>
-</section>
+<main class="shell">
 
-<section id="ranking" hidden>
-  <p class="mode">Lots are ordered by degradation rate. Absolute days to
-  threshold are withheld: Thompson&rsquo;s dry-matter-loss coefficients are
-  unverified, so this system ranks and does not predict.</p>
-  <div id="ranking-body"></div>
-  <button id="reset">Clear session</button>
-</section>
+  <section id="capture" class="panel panel-capture" aria-labelledby="capture-h">
+    <h2 id="capture-h" class="panel-title">Capture</h2>
+    <form id="capture-form" novalidate>
+      <div class="field">
+        <label for="f-lot">Lot name</label>
+        <input id="f-lot" name="lot_id" required autocomplete="off"
+               placeholder="brand A, bag 2">
+      </div>
+      <div class="field-row">
+        <div class="field">
+          <label for="f-temp">Temperature</label>
+          <div class="with-unit">
+            <input id="f-temp" name="temperature_c" type="number" step="0.1"
+                   value="25" required inputmode="decimal">
+            <span class="unit">&deg;C</span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="f-moist">Moisture</label>
+          <div class="with-unit">
+            <input id="f-moist" name="moisture_pct_wb" type="number" step="0.1"
+                   value="14" required inputmode="decimal">
+            <span class="unit">% wb</span>
+          </div>
+        </div>
+      </div>
+      <div class="field field-photo">
+        <label for="f-photo" id="photo-label">Tray photograph</label>
+        <input id="f-photo" name="photo" type="file" accept="image/*"
+               capture="environment" required>
+        <div class="dropzone" id="dropzone" data-empty="true">
+          <span class="dropzone-primary">Photograph the tray</span>
+          <span class="dropzone-secondary">or choose an image</span>
+          <span class="dropzone-filename" id="photo-filename"></span>
+        </div>
+      </div>
+      <button type="submit" id="measure">Measure</button>
+    </form>
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+  </section>
+
+  <div class="results">
+
+    <section id="result" class="panel panel-result" aria-labelledby="result-h" hidden>
+      <h2 id="result-h" class="panel-title">Reading</h2>
+      <div id="result-body"></div>
+    </section>
+
+    <section id="ranking" class="panel panel-ranking" aria-labelledby="ranking-h">
+      <h2 id="ranking-h" class="panel-title">Ranking</h2>
+      <p class="gated">
+        Lots are ordered by degradation rate. Days to threshold are withheld:
+        Thompson&rsquo;s coefficients are unverified, so this system ranks and
+        does not predict.
+      </p>
+      <div id="ranking-body"></div>
+      <button id="reset" class="quiet" hidden>Clear session</button>
+    </section>
+
+  </div>
+</main>
+
+<footer class="colophon">
+  <p>
+    Measures the input a published deterioration model needs, so the model can
+    run without hand-counting kernels. Validates the measurement, not the
+    storage model.
+  </p>
+  <p class="cites">
+    Thompson 1972 &middot; Steele 1967 &middot; Bern 2002
+  </p>
+</footer>
 
 <script src="/static/app.js"></script>
 </body>
