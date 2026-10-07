@@ -5,9 +5,9 @@
 **Models:** `models/localiser.pt`, `models/classifier.session.pt`
 **Raw results:** `models/scale-sensitivity.json`
 
-## A correction to the plan's ground truth
+## A correction to the ground truth
 
-The plan specified `--true-kernels 197`. That is the number the synthesiser
+An earlier setting used `--true-kernels 197`. That is the number the synthesiser
 *placed*, not the number a segmenter can *see*: overlap and edge clipping mean
 32 of those 197 are not separable kernels in the rendered tray.
 `models/pipeline-validation.json` records the countable truth for this tray as
@@ -56,8 +56,7 @@ is resized so its long edge is **1391 px**.
 
 ## What this means for capture
 
-**A fixed resize suffices. No framing guide is required.** This is the
-outcome the plan hoped for and did not assume.
+**A fixed resize suffices. No framing guide is required.**
 
 A 2.5x tolerance in apparent kernel size is wide enough that a person holding a
 phone over a tray cannot easily leave it. To fall below 0.6 the tray would have
@@ -65,7 +64,7 @@ to occupy under a quarter of the frame; to exceed 1.5 the phone would have to
 be close enough that the tray no longer fits. Both are visible mistakes that a
 photographer corrects without instruction.
 
-Two consequences carry into Task 3:
+Two consequences for the capture app:
 
 1. The server resizes on the **long edge**, not on kernel size, because the
    band is wide enough that a proxy is unnecessary.

@@ -8,3 +8,4 @@ models/
 .pytest_cache/
 data/interim/
 .worktrees/
+.DS_Store

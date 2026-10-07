@@ -4,7 +4,7 @@ The localiser is fully convolutional and has no scale invariance: it learned
 kernels at one size in pixels and a photograph presenting them at another is a
 different problem. Every upload is therefore brought to one working scale
 before it reaches the pipeline. The size, and the drift it tolerates, were
-measured -- see docs/superpowers/plans/scale-experiment-result.md.
+measured -- see docs/scale-experiment-result.md.
 """
 
 from __future__ import annotations

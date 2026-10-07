@@ -45,7 +45,7 @@ MIN_RELATIVE_AREA = 0.15
 # --- Framing limits --------------------------------------------------------
 # Measured across the six validation trays, where a kernel occupies 0.277% to
 # 0.331% of the frame. The tolerance either side is the scale band from
-# docs/superpowers/plans/scale-experiment-result.md: counting holds between
+# docs/scale-experiment-result.md: counting holds between
 # 0.6x and 1.5x the trained size, which is 0.36x to 2.25x in area.
 #
 # This matters because the localiser is fully convolutional and has no scale
