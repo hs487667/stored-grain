@@ -122,9 +122,37 @@ def relight(scene: np.ndarray, bg: np.ndarray, mask: np.ndarray, rng: random.Ran
     return np.clip(out, 0, 255).astype(np.uint8)
 
 
-def compose_one(source: Path, texture: Path, rng: random.Random) -> tuple[np.ndarray, np.ndarray]:
+def rescale(image: np.ndarray, instances: np.ndarray, factor: float,
+            rng: random.Random) -> tuple[np.ndarray, np.ndarray]:
+    """Resize the kernels by ``factor`` inside a frame of the same size.
+
+    Larger kernels are cropped to a random window; smaller ones are placed at a
+    random offset with empty surface around them.
+    """
+    h, w = instances.shape
+    size = (max(1, round(w * factor)), max(1, round(h * factor)))
+    big = np.asarray(Image.fromarray(image.astype(np.uint8)).resize(size, Image.LANCZOS), dtype=np.float32)
+    big_inst = np.asarray(Image.fromarray(instances.astype(np.int32)).resize(size, Image.NEAREST))
+    out = np.zeros_like(image)
+    out_inst = np.zeros_like(instances)
+    sh, sw = big_inst.shape
+    if factor >= 1:
+        y, x = rng.randint(0, sh - h), rng.randint(0, sw - w)
+        out, out_inst = big[y : y + h, x : x + w], big_inst[y : y + h, x : x + w]
+    else:
+        y, x = rng.randint(0, h - sh), rng.randint(0, w - sw)
+        out[y : y + sh, x : x + sw] = big
+        out_inst[y : y + sh, x : x + sw] = big_inst
+    return out, out_inst
+
+
+def compose_one(source: Path, texture: Path, rng: random.Random,
+                scale: tuple[float, float] = (1.0, 1.0)) -> tuple[np.ndarray, np.ndarray]:
     image = np.asarray(Image.open(source).convert("RGB"), dtype=np.float32)
     instances = load_instances(source)
+    factor = rng.uniform(*scale)
+    if factor != 1.0:
+        image, instances = rescale(image, instances, factor, rng)
     if rng.random() < 0.5:
         image, instances = scatter(image, instances, rng)
     bg = background(texture, (instances.shape[1], instances.shape[0]), rng)
@@ -135,10 +163,11 @@ def compose_one(source: Path, texture: Path, rng: random.Random) -> tuple[np.nda
     return np.asarray(Image.open(buffer).convert("RGB")), instances
 
 
-def write_split(sources: list[Path], textures: list[Path], n: int, out: Path, prefix: str, seed: int) -> None:
+def write_split(sources: list[Path], textures: list[Path], n: int, out: Path, prefix: str, seed: int,
+                scale: tuple[float, float] = (1.0, 1.0)) -> None:
     rng = random.Random(seed)
     for i in range(n):
-        image, instances = compose_one(rng.choice(sources), rng.choice(textures), rng)
+        image, instances = compose_one(rng.choice(sources), rng.choice(textures), rng, scale)
         folder = out / f"{prefix}{i // GROUP_SIZE:03d}"
         folder.mkdir(parents=True, exist_ok=True)
         Image.fromarray(image).save(folder / f"{i:05d}.png")
@@ -149,21 +178,30 @@ def write_split(sources: list[Path], textures: list[Path], n: int, out: Path, pr
 
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--real", required=True, help="auto-labelled trays, one folder per tray")
+    p.add_argument("--real", help="auto-labelled trays, one folder per tray")
+    p.add_argument("--synthetic", help="GrainSet scenes with train/ and val/ folders, used instead of --real; "
+                   "they carry the damaged and discoloured kernels the trays lack")
+    p.add_argument("--scale", default="1,1", help="range of kernel resizing, e.g. 0.35,1.1")
+    p.add_argument("--prefix", default="bg")
     p.add_argument("--textures", default="data/raw/backgrounds/polyhaven")
     p.add_argument("--out", default="data/interim/backgrounds")
-    p.add_argument("--val-groups", required=True)
-    p.add_argument("--test-groups", required=True)
+    p.add_argument("--val-groups", default="")
+    p.add_argument("--test-groups", default="")
     p.add_argument("--train", type=int, default=1200)
     p.add_argument("--val", type=int, default=100)
     p.add_argument("--val-texture-fraction", type=float, default=0.15)
     args = p.parse_args()
 
-    val_groups = set(args.val_groups.split(","))
-    test_groups = set(args.test_groups.split(","))
-    real = Path(args.real)
-    train_sources = real_scene_paths(real, exclude=val_groups | test_groups)
-    val_sources = real_scene_paths(real, groups=val_groups)
+    val_groups = {g for g in args.val_groups.split(",") if g}
+    test_groups = {g for g in args.test_groups.split(",") if g}
+    if args.synthetic:
+        scenes = lambda d: sorted(p for p in (Path(args.synthetic) / d).glob("*.png") if not p.stem.endswith("_inst"))
+        train_sources, val_sources = scenes("train"), scenes("val")
+    else:
+        real = Path(args.real)
+        train_sources = real_scene_paths(real, exclude=val_groups | test_groups)
+        val_sources = real_scene_paths(real, groups=val_groups)
+    scale = tuple(float(v) for v in args.scale.split(","))
 
     textures = sorted(Path(args.textures).glob("*.jpg"))
     random.Random(0).shuffle(textures)
@@ -172,7 +210,7 @@ def main() -> None:
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    (out / "split.json").write_text(json.dumps({
+    (out / f"{args.prefix}-split.json").write_text(json.dumps({
         "train_trays": sorted({s.parent.name for s in train_sources}),
         "val_trays": sorted(val_groups), "test_trays": sorted(test_groups),
         "train_textures": [t.stem for t in train_textures],
@@ -181,8 +219,8 @@ def main() -> None:
     print(f"sources: train {len(train_sources)} | val {len(val_sources)}; "
           f"textures: train {len(train_textures)} | val {len(val_textures)}", flush=True)
 
-    write_split(val_sources, val_textures, args.val, out, "bgval", seed=2)
-    write_split(train_sources, train_textures, args.train, out, "bgtrain", seed=1)
+    write_split(val_sources, val_textures, args.val, out, f"{args.prefix}val", seed=2, scale=scale)
+    write_split(train_sources, train_textures, args.train, out, f"{args.prefix}train", seed=1, scale=scale)
 
 
 if __name__ == "__main__":

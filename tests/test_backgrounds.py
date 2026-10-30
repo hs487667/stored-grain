@@ -39,3 +39,15 @@ def test_a_composite_keeps_every_label_it_shows(tmp_path):
         # point, but the labelled pixels must still be the yellow ones.
         yellow = scene[..., 0].astype(int) - scene[..., 2]
         assert yellow[instances > 0].mean() > yellow[instances == 0].mean() + 50
+
+
+def test_rescaling_keeps_the_frame_and_scales_kernel_area(tmp_path):
+    from src.vision.backgrounds import rescale
+
+    image, instances = _tray(tmp_path)
+    for factor in (0.5, 2.0):
+        _, out = rescale(image.astype(np.float32), instances, factor, random.Random(1))
+        assert out.shape == instances.shape
+        _, areas = np.unique(out[out > 0], return_counts=True)
+        # The largest surviving kernel is whole: 600 px times the area factor.
+        assert abs(areas.max() - 600 * factor**2) <= 0.1 * 600 * factor**2
