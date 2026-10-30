@@ -152,16 +152,19 @@ def evaluate(model, dataset, dev, limit: int = 24) -> dict:
     }
 
 
-def app_instances(logits: torch.Tensor) -> np.ndarray:
-    """Instances exactly as the app counts them: watershed, then the pipeline's
-    rule dropping blobs below a fraction of the median kernel area."""
+def drop_debris(instances: np.ndarray) -> np.ndarray:
+    """The pipeline's rule: blobs below a fraction of the median area are not kernels."""
     from src.pipeline import MIN_RELATIVE_AREA
 
-    instances = instances_from_logits(logits)
     labels, areas = np.unique(instances[instances > 0], return_counts=True)
     if len(labels):
         instances[np.isin(instances, labels[areas < np.median(areas) * MIN_RELATIVE_AREA])] = 0
     return instances
+
+
+def app_instances(logits: torch.Tensor) -> np.ndarray:
+    """Instances exactly as the app counts them: watershed, then the debris rule."""
+    return drop_debris(instances_from_logits(logits))
 
 
 @torch.no_grad()
@@ -170,6 +173,12 @@ def evaluate_scenes(model, paths: list[Path], dev) -> dict:
 
     For real photographs the instance maps are auto-labels, so these numbers
     measure agreement with the labels, not accuracy against a hand count.
+
+    The truth goes through the same debris rule as the prediction. GrainSet
+    scenes include impurities -- stones, dust, chaff at about 0.07 of a sound
+    kernel's area -- which the app drops on purpose because the damage ratio
+    excludes non-kernel material. Left in the truth, they read as about 15% of
+    kernels missed when the localiser finds them and the pipeline discards them.
     """
     from PIL import Image
 
@@ -179,7 +188,7 @@ def evaluate_scenes(model, paths: list[Path], dev) -> dict:
     counts, relative, f1s = [], [], []
     for path in paths:
         image = np.array(Image.open(path).convert("RGB"))
-        truth = load_instances(path)
+        truth = drop_debris(load_instances(path))
         predicted = app_instances(predict_scene(model, image, dev))
         ce = count_error(predicted, truth)
         counts.append(abs(ce["error"]))

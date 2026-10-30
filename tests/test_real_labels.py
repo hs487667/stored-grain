@@ -147,3 +147,17 @@ def test_scene_dataset_rescales_and_repeats(tmp_path):
 def test_training_uses_an_nvidia_gpu_when_one_is_present(monkeypatch):
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     assert train_localiser.device().type == "cuda"
+
+
+def test_scoring_drops_impurities_from_the_truth_as_the_app_does():
+    # Ten kernels and three specks at 0.07 of a kernel's area: a localiser that
+    # finds the kernels and a pipeline that discards the specks scores perfect.
+    truth = np.zeros((200, 200), dtype=np.int32)
+    for i in range(10):
+        truth[(i // 5) * 40 : (i // 5) * 40 + 30, (i % 5) * 40 : (i % 5) * 40 + 30] = i + 1
+    for j in range(3):
+        truth[150 + j * 15 : 158 + j * 15, 150:158] = 11 + j
+
+    kept = train_localiser.drop_debris(truth.copy())
+
+    assert len(np.unique(kept)) - 1 == 10
