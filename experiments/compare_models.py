@@ -1,7 +1,10 @@
 """Compare kernel classifiers under one recipe, and keep the confusion matrices.
 
 Every model sees the same corpus, the same session split, the same single-view
-framing the pipeline uses, the same augmentation and the same class weights.
+framing, the same augmentation and the same class weights. Single-view is not
+the framing the pipeline's classifier uses (see assert_crop_framing in
+src/pipeline.py), so these rows compare architectures with one another; they do
+not reproduce the deployed checkpoint's score.
 The checkpoint is chosen on the validation split; the number reported is the
 held-out test split, which nothing here ever trains or selects on. Under those
 rules a difference between two rows is a difference between the models, not
