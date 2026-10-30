@@ -251,7 +251,7 @@ def _crop(image: np.ndarray, instances: np.ndarray, label: int, pad: int = 4):
 class Pipeline:
     def __init__(
         self,
-        localiser_checkpoint: str | Path = "models/localiser-real.pt",
+        localiser_checkpoint: str | Path = "models/localiser-bg2.pt",
         classifier_checkpoint: str | Path = "models/classifier.session.pt",
         device: torch.device | None = None,
         batch_size: int = 128,

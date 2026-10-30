@@ -9,8 +9,10 @@ On Windows, double-click `run-app.bat` in `stored-grain/`, or from that folder:
     .venv\Scripts\python.exe -m uvicorn src.app.server:app --host 0.0.0.0 --port 8000
 
 Start it from `stored-grain/`: the model checkpoints are loaded from
-`models/` relative to the current folder — `localiser-real.pt` (the kernel
-localiser fine-tuned on real phone photos of trays) and
+`models/` relative to the current folder — `localiser-bg2.pt` (the kernel
+localiser fine-tuned on real phone photos of trays, then on real and GrainSet
+kernels pasted onto other surfaces, under uneven light and at 0.35x to 2.2x
+their size; see `src/vision/backgrounds.py`) and
 `classifier.session.pt`. On macOS/Linux the interpreter is `.venv/bin/python`
 instead.
 
