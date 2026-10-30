@@ -56,8 +56,11 @@ MIN_RELATIVE_AREA = 0.15
 #: Median kernel area as a fraction of the frame, at the near limit.
 MAX_KERNEL_FRAME_FRACTION = 0.00745
 
-#: The same at the far limit.
-MIN_KERNEL_FRAME_FRACTION = 0.00100
+#: The same at the far limit. Set from localiser-real.pt rather than the
+#: synthetic scale band above: real trays of 300-530 kernels sit at 0.066% to
+#: 0.075%, and the four held-out trays, shrunk onto their own background,
+#: still count within 1.8% mean and 2.7% worst at 0.018%. 3.8% mean at 0.012%.
+MIN_KERNEL_FRAME_FRACTION = 0.00020
 
 #: Below this a damage percentage is arithmetic on too small a sample to mean
 #: anything, whatever the framing looks like.

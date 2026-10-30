@@ -339,6 +339,23 @@ def test_kernels_far_too_small_are_refused():
         check_framing(instances, labels)
 
 
+def test_a_full_real_tray_passes():
+    import numpy as np
+
+    from src.pipeline import check_framing
+
+    # A 400-kernel phone tray: about 1063 px per kernel in a 1043x1391 frame,
+    # 0.073% each, which the localiser counts to within 0.3%.
+    instances = np.zeros((1043, 1391), dtype=int)
+    labels = []
+    for i in range(400):
+        r, c = divmod(i, 25)
+        instances[r * 60 : r * 60 + 33, c * 55 : c * 55 + 32] = i + 1
+        labels.append(i + 1)
+
+    check_framing(instances, labels)
+
+
 def test_too_few_kernels_to_support_a_percentage_is_refused():
     import numpy as np
 
